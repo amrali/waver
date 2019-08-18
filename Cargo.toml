@@ -1,7 +1,18 @@
 [package]
 name = "waver"
-version = "0.1.0"
+description = "waver: waveform generation library"
+version = "0.0.1"
 authors = ["Amr Ali <amralicc@gmail.com>"]
+license = "Apache-2.0"
+homepage = "https://github.com/amrali/waver/"
+categories = ["no-std", "multimedia-audio", "science", "embedded"]
+keywords = ["signal-processing", "waveform", "wave-generator", "wave"]
+exclude = [".gitignore", ".travis.yml", ".cargo/config"]
+readme = "README.md"
 edition = "2018"
 
 [dependencies]
+wee_alloc = "0.4"
+
+[profile.release]
+lto = true
