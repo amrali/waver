@@ -11,6 +11,10 @@ exclude = [".gitignore", ".travis.yml", ".cargo/config"]
 readme = "README.md"
 edition = "2018"
 
+[badges]
+travis-ci = { repository = "amrali/waver", branch = "master" }
+codecov = { repository = "amrali/waver", branch = "master", service = "github" }
+
 [dependencies]
 wee_alloc = "0.4"
 
