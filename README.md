@@ -1,10 +1,8 @@
 Waver [![Build Status](https://img.shields.io/travis/amrali/waver/master.svg?logo=travis)](https://travis-ci.org/amrali/waver) [![codecov](https://img.shields.io/codecov/c/github/amrali/waver?logo=codecov)](https://codecov.io/gh/amrali/waver) [![Crates.io](https://img.shields.io/crates/v/waver.svg?logo=rust)](https://crates.io/crates/waver) [![Documentation](https://img.shields.io/badge/docs-current-blue.svg?logo=rust)](https://docs.rs/waver)
 =====
 
-A waveform generation library for Rust.
-
-Waver is a simple no-std library to generate any waveform of a given frequency
-and amplitude.
+Waver is a simple no-std library to generate any waveform of a given frequency,
+amplitude and phase.
 
 A waveform can be a simple sinusoidal wave or a complex waveform of varying
 frequency and amplitude. Waver is useful where there's a need to generate

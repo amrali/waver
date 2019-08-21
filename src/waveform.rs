@@ -14,13 +14,13 @@
 
 //! A module for waveform construction and quantization.
 
+use crate::{Wave, WaveIterator};
 use alloc::vec::Vec;
 use core::{
+    iter::{IntoIterator, Iterator},
     marker::PhantomData,
-    iter::{Iterator, IntoIterator},
 };
-use num_traits::{Bounded, AsPrimitive, NumCast};
-use crate::{Wave, WaveIterator};
+use num_traits::{AsPrimitive, Bounded, NumCast};
 
 /// A structure that represent a waveform.
 #[derive(Debug, Clone)]
@@ -44,7 +44,7 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     /// ```
     pub fn new(sample_rate: f32) -> Self {
         Self {
-            sample_rate: sample_rate,
+            sample_rate,
             components: Vec::new(),
             _marker: PhantomData,
         }
@@ -78,7 +78,10 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     ///     .superpose(Wave { frequency: 5500.0, amplitude: 0.75, ..Default::default() });
     /// ```
     pub fn superpose(&mut self, wave: Wave) -> &mut Self {
-        self.components.push(Wave { sample_rate: self.sample_rate, ..wave });
+        self.components.push(Wave {
+            sample_rate: self.sample_rate,
+            ..wave
+        });
         self
     }
 
@@ -87,8 +90,8 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     /// When superposing waves with a combined amplitude-weights that exceed
     /// 100% normally waves would be clipped at the highest quantization level.
     ///
-    /// In waver overshoot causes quantization to become numerically unstable
-    /// which manifests in iterator stop.
+    /// In waver, overshoot causes quantization to become numerically unstable
+    /// which manifests in an iterator stop.
     ///
     /// Use this method to normalize all weights to equal shares of the amplitude.
     ///
@@ -104,7 +107,9 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     /// ```
     pub fn normalize_amplitudes(&mut self) -> &mut Self {
         let amp_ratio = 1.0 / self.components.len() as f32;
-        self.components.iter_mut().for_each(|c| c.amplitude = amp_ratio);
+        self.components
+            .iter_mut()
+            .for_each(|c| c.amplitude = amp_ratio);
         self
     }
 
@@ -151,12 +156,18 @@ pub struct WaveformIterator<'a, BitDepth: Clone> {
     iters: Vec<WaveIterator<'a>>,
 }
 
-impl<'a, BitDepth: Bounded + NumCast + AsPrimitive<f32>> Iterator for WaveformIterator<'a, BitDepth> {
+impl<'a, BitDepth: Bounded + NumCast + AsPrimitive<f32>> Iterator
+    for WaveformIterator<'a, BitDepth>
+{
     type Item = BitDepth;
 
     fn next(&mut self) -> Option<Self::Item> {
         // Superpose all waveform components.
-        let superposition: f32 = self.iters.iter_mut().map(|x| x.next().expect("waves are infinite")).sum();
+        let superposition: f32 = self
+            .iters
+            .iter_mut()
+            .map(|x| x.next().expect("waves are infinite"))
+            .sum();
         NumCast::from(superposition * BitDepth::max_value().as_())
     }
 }
@@ -168,11 +179,19 @@ mod tests {
 
     #[test]
     fn test_waveform_single_wave_match() {
-        let w3khz = Wave { sample_rate: 44100.0, frequency: 3000.0, ..Default::default() };
+        let w3khz = Wave {
+            sample_rate: 44100.0,
+            frequency: 3000.0,
+            ..Default::default()
+        };
         let wf = Waveform::<i16>::with_wave(44100.0, w3khz);
 
         let w1: Vec<i16> = wf.iter().take(100).collect();
-        let w2: Vec<i16> = w3khz.iter().take(100).map(|c| (c * i16::MAX as f32) as i16).collect();
+        let w2: Vec<i16> = w3khz
+            .iter()
+            .take(100)
+            .map(|c| (c * i16::MAX as f32) as i16)
+            .collect();
 
         assert_eq!(w1, w2);
     }
@@ -186,27 +205,70 @@ mod tests {
 
     #[test]
     fn test_waveform_construct() {
-        let wf1 = Waveform::<i16>::with_wave(44100.0, Wave { frequency: 3400.0, amplitude: 1.0, ..Default::default() });
+        let wf1 = Waveform::<i16>::with_wave(
+            44100.0,
+            Wave {
+                frequency: 3400.0,
+                amplitude: 1.0,
+                ..Default::default()
+            },
+        );
         let mut wf2 = Waveform::<i16>::new(44100.0);
 
         let v1: Vec<i16> = wf1.iter().take(100).collect();
-        let v2: Vec<i16> = wf2.superpose(Wave { frequency: 3400.0, ..Default::default() }).iter().take(100).collect();
+        let v2: Vec<i16> = wf2
+            .superpose(Wave {
+                frequency: 3400.0,
+                ..Default::default()
+            })
+            .iter()
+            .take(100)
+            .collect();
 
         assert_eq!(v1, v2);
     }
 
     #[test]
     fn test_waveform_amplitude_normalization() {
-        let mut wf = Waveform::<i16>::with_wave(44100.0, Wave { frequency: 4000.0, amplitude: 1.5, ..Default::default() });
-        wf.superpose(Wave { frequency: 5000.0, amplitude: 0.5, ..Default::default() }).normalize_amplitudes();
+        let mut wf = Waveform::<i16>::with_wave(
+            44100.0,
+            Wave {
+                frequency: 4000.0,
+                amplitude: 1.5,
+                ..Default::default()
+            },
+        );
+        wf.superpose(Wave {
+            frequency: 5000.0,
+            amplitude: 0.5,
+            ..Default::default()
+        })
+        .normalize_amplitudes();
 
-        wf.components.iter().for_each(|c| assert_eq!(c.amplitude, 0.5));
+        wf.components
+            .iter()
+            .for_each(|c| assert_eq!(c.amplitude, 0.5));
     }
 
     #[test]
     fn test_waveform_iterator_halt_numerical_instability() {
-        let mut wf = Waveform::<i16>::with_wave(44100.0, Wave { frequency: 4000.0, amplitude: 1.0, ..Default::default() });
-        let v: Vec<i16> = wf.superpose(Wave { frequency: 5000.0, amplitude: 0.5, ..Default::default() }).iter().take(100).collect();
+        let mut wf = Waveform::<i16>::with_wave(
+            44100.0,
+            Wave {
+                frequency: 4000.0,
+                amplitude: 1.0,
+                ..Default::default()
+            },
+        );
+        let v: Vec<i16> = wf
+            .superpose(Wave {
+                frequency: 5000.0,
+                amplitude: 0.5,
+                ..Default::default()
+            })
+            .iter()
+            .take(100)
+            .collect();
 
         assert_ne!(v.len(), 100);
     }

@@ -14,12 +14,12 @@
 
 //! A module for wave types and iterators.
 
-use libm::sinf;
 use core::{
-    fmt,
     f32::consts::PI,
-    iter::{Iterator, IntoIterator},
+    fmt,
+    iter::{IntoIterator, Iterator},
 };
+use libm::sinf;
 
 /// A structure that represent a sinusoidal wave.
 ///
@@ -56,7 +56,10 @@ impl Wave {
     /// let res: Vec<f32> = wave.iter().take(10).collect();
     /// ```
     pub fn iter(&self) -> WaveIterator {
-        WaveIterator { inner: self, index: 0.0 }
+        WaveIterator {
+            inner: self,
+            index: 0.0,
+        }
     }
 }
 
@@ -67,7 +70,7 @@ impl<'a> IntoIterator for &'a Wave {
     fn into_iter(self) -> Self::IntoIter {
         WaveIterator {
             inner: self,
-            index: 0.0
+            index: 0.0,
         }
     }
 }
@@ -85,8 +88,11 @@ impl Default for Wave {
 
 impl fmt::Display for Wave {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<Freq: {}Hz, Ampl: {}, Sampling Freq: {}Hz>",
-               self.frequency, self.amplitude, self.sample_rate)
+        write!(
+            f,
+            "<Freq: {}Hz, Ampl: {}, Sampling Freq: {}Hz>",
+            self.frequency, self.amplitude, self.sample_rate
+        )
     }
 }
 
@@ -115,9 +121,7 @@ impl<'a> Iterator for WaveIterator<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let t = self.index_inc() / self.inner.sample_rate;
 
-        Some(
-            self.inner.amplitude *
-            sinf(2.0 * PI * t * self.inner.frequency + self.inner.phase))
+        Some(self.inner.amplitude * sinf(2.0 * PI * t * self.inner.frequency + self.inner.phase))
     }
 }
 
@@ -130,12 +134,24 @@ mod tests {
     fn test_wave_default() {
         let wave: Wave = Default::default();
 
-        assert_eq!(wave, Wave { sample_rate: 0.0, frequency: 0.0, phase: 0.0, amplitude: 1.0 });
+        assert_eq!(
+            wave,
+            Wave {
+                sample_rate: 0.0,
+                frequency: 0.0,
+                phase: 0.0,
+                amplitude: 1.0
+            }
+        );
     }
 
     #[test]
     fn test_wave_iteration() {
-        let wave = Wave { sample_rate: 500.0, frequency: 130.0, ..Default::default() };
+        let wave = Wave {
+            sample_rate: 500.0,
+            frequency: 130.0,
+            ..Default::default()
+        };
         let res: Vec<f32> = wave.iter().take(1001).collect();
 
         // It must start from the point of origin.
@@ -147,7 +163,12 @@ mod tests {
 
     #[test]
     fn test_wave_phase_shift() {
-        let wave = Wave { sample_rate: 500.0, frequency: 120.0, phase: PI / 2.0, ..Default::default() };
+        let wave = Wave {
+            sample_rate: 500.0,
+            frequency: 120.0,
+            phase: PI / 2.0,
+            ..Default::default()
+        };
         let res: Vec<f32> = wave.iter().take(5).collect();
 
         // A cosine wave is a sine wave with a phase shift of Pi / 2.

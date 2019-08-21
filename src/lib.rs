@@ -12,12 +12,40 @@
 //   See the License for the specific language governing permissions and
 //   limitations under the License.
 
-//! # Waver is rust waveform generation library
+//! # Waver: waveform generation library
 //!
 //! A waveform can be the fundamental sinusoidal wave or a complex waveform of varying
 //! frequency, phase shift or amplitude. Waver is useful where there's a need to generate
 //! a simple sinusoidal sound wave or for constructing a frequency or amplitude
 //! modulated carrier wave in bare-metal Arduino or a Raspberry Pi.
+//!
+//! ## Features
+//!
+//! * Arbitrary quantization levels. Specify the bit depth when constructing `Waveform`.
+//! * Online wave generation. No buffers, infinite iterators.
+//! * Wave superposition with weighted amplitudes.
+//! * Modulate signal's frequency, amplitude or phase.
+//! * Numerically stable, prevents clipping.
+//!
+//! ## Example
+//!
+//! ```rust
+//! use std::{vec::Vec, f32::consts::PI};
+//! use waver::{Waveform, Wave};
+//!
+//! fn main() {
+//!   // 44.1Khz sampling rate and 16-bit depth.
+//!   let mut wf = waver::Waveform::<i16>::new(44100.0);
+//!
+//!   // Superpose a sine wave and a cosine wave.
+//!   wf.superpose(Wave { frequency: 2600.0, ..Default::default() })
+//!     .superpose(Wave { frequency: 2600.0, phase: PI / 2.0, ..Default::default() })
+//!     .normalize_amplitudes();
+//!
+//!   // Quantization of 100 samples
+//!   let _output: Vec<i16> = wf.iter().take(100).collect();
+//! }
+//! ```
 
 #![no_std]
 
