@@ -9,17 +9,19 @@ categories = ["no-std", "multimedia::audio", "science", "embedded"]
 keywords = ["signal-processing", "waveform", "wave-generator", "wave"]
 exclude = [".gitignore", ".travis.yml", ".cargo/config"]
 readme = "README.md"
-edition = "2018"
+edition = "2021"
+resolver = "2"
 
 [badges]
 travis-ci = { repository = "amrali/waver", branch = "master" }
 codecov = { repository = "amrali/waver", branch = "master", service = "github" }
 
 [dependencies]
-libm = "0.1"
+libm = "0.2"
 wee_alloc = "0.4"
 num-traits = { version = "0.2", default-features = false }
 doc-comment = "0.3"
 
 [profile.release]
 lto = true
+panic = 'abort'
