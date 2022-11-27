@@ -34,10 +34,11 @@ pub enum WaveFunc {
 impl fmt::Display for WaveFunc {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
-            f, "{}",
+            f,
+            "{}",
             match self {
                 Self::Sine => "Sine",
-                Self::Cosine => "Cosine"
+                Self::Cosine => "Cosine",
             }
         )
     }
@@ -145,7 +146,7 @@ impl<'a> WaveIterator<'a> {
     fn func(&self, x: f32) -> f32 {
         match self.inner.wavefunc {
             WaveFunc::Sine => sinf(x),
-            WaveFunc::Cosine => sinf(PI / 2.0 - x)
+            WaveFunc::Cosine => sinf(PI / 2.0 - x),
         }
     }
 }
@@ -156,7 +157,10 @@ impl<'a> Iterator for WaveIterator<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let t = self.index_inc() / self.inner.sample_rate;
 
-        Some(self.inner.amplitude * self.func(2.0 * PI * t * self.inner.frequency + self.inner.phase))
+        Some(
+            self.inner.amplitude
+                * self.func(2.0 * PI * t * self.inner.frequency + self.inner.phase),
+        )
     }
 }
 
