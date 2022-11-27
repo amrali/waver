@@ -58,7 +58,7 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 mod wave;
 mod waveform;
 
-pub use wave::{Wave, WaveIterator};
+pub use wave::{Wave, WaveFunc, WaveIterator};
 pub use waveform::{Waveform, WaveformIterator};
 
 // Test README.md

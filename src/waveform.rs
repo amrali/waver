@@ -131,7 +131,7 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     /// ```
     pub fn iter(&self) -> WaveformIterator<BitDepth> {
         WaveformIterator {
-            inner: self,
+            _inner: self,
             iters: self.components.iter().map(|c| c.iter()).collect(),
         }
     }
@@ -143,7 +143,7 @@ impl<'a, BitDepth: Bounded + NumCast + AsPrimitive<f32>> IntoIterator for &'a Wa
 
     fn into_iter(self) -> Self::IntoIter {
         WaveformIterator {
-            inner: self,
+            _inner: self,
             iters: self.components.iter().map(|c| c.iter()).collect(),
         }
     }
@@ -152,7 +152,7 @@ impl<'a, BitDepth: Bounded + NumCast + AsPrimitive<f32>> IntoIterator for &'a Wa
 /// Iterator for Waveform structure.
 #[derive(Debug, Clone)]
 pub struct WaveformIterator<'a, BitDepth: Clone> {
-    inner: &'a Waveform<BitDepth>,
+    _inner: &'a Waveform<BitDepth>,
     iters: Vec<WaveIterator<'a>>,
 }
 
