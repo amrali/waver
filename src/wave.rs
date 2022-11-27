@@ -22,7 +22,7 @@ use core::{
 use libm::sinf;
 
 /// An enum that represents the kind of the wave function.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum WaveFunc {
     /// The sine function.
     Sine,
