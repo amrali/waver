@@ -33,18 +33,16 @@
 //! use std::{vec::Vec, f32::consts::PI};
 //! use waver::{Waveform, Wave};
 //!
-//! fn main() {
-//!   // 44.1Khz sampling rate and 16-bit depth.
-//!   let mut wf = waver::Waveform::<i16>::new(44100.0);
+//! // 44.1Khz sampling rate and 16-bit depth.
+//! let mut wf = waver::Waveform::<i16>::new(44100.0);
 //!
-//!   // Superpose a sine wave and a cosine wave.
-//!   wf.superpose(Wave { frequency: 2600.0, ..Default::default() })
-//!     .superpose(Wave { frequency: 2600.0, phase: PI / 2.0, ..Default::default() })
-//!     .normalize_amplitudes();
+//! // Superpose a sine wave and a cosine wave.
+//! wf.superpose(Wave { frequency: 2600.0, ..Default::default() })
+//!   .superpose(Wave { frequency: 2600.0, phase: PI / 2.0, ..Default::default() })
+//!   .normalize_amplitudes();
 //!
-//!   // Quantization of 100 samples
-//!   let _output: Vec<i16> = wf.iter().take(100).collect();
-//! }
+//! // Quantization of 100 samples
+//! let _output: Vec<i16> = wf.iter().take(100).collect();
 //! ```
 
 #![no_std]
