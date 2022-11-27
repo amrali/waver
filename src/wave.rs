@@ -21,6 +21,28 @@ use core::{
 };
 use libm::sinf;
 
+/// An enum that represents the kind of the wave function.
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum WaveFunc {
+    /// The sine function.
+    Sine,
+
+    /// The cosine function.
+    Cosine,
+}
+
+impl fmt::Display for WaveFunc {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f, "{}",
+            match self {
+                Self::Sine => "Sine",
+                Self::Cosine => "Cosine"
+            }
+        )
+    }
+}
+
 /// A structure that represent a sinusoidal wave.
 ///
 /// The default value for a wave values is 0.0 except for the amplitude weight
@@ -38,6 +60,9 @@ pub struct Wave {
 
     /// The amplitude as a percentage [0.0 - 1.0].
     pub amplitude: f32,
+
+    /// The trignomic function to express the wave.
+    pub wavefunc: WaveFunc,
 }
 
 impl Wave {
@@ -82,6 +107,7 @@ impl Default for Wave {
             frequency: 0.0,
             phase: 0.0,
             amplitude: 1.0,
+            wavefunc: WaveFunc::Sine,
         }
     }
 }
@@ -90,8 +116,8 @@ impl fmt::Display for Wave {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "<Freq: {}Hz, Ampl: {}, Sampling Freq: {}Hz>",
-            self.frequency, self.amplitude, self.sample_rate
+            "<Func: {}, Freq: {}Hz, Ampl: {}, Sampling Freq: {}Hz>",
+            self.wavefunc, self.frequency, self.amplitude, self.sample_rate
         )
     }
 }
@@ -113,6 +139,15 @@ impl<'a> WaveIterator<'a> {
 
         idx
     }
+
+    /// Resolve the wave function.
+    #[inline]
+    fn func(&self, x: f32) -> f32 {
+        match self.inner.wavefunc {
+            WaveFunc::Sine => sinf(x),
+            WaveFunc::Cosine => sinf(PI / 2.0 - x)
+        }
+    }
 }
 
 impl<'a> Iterator for WaveIterator<'a> {
@@ -121,7 +156,7 @@ impl<'a> Iterator for WaveIterator<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let t = self.index_inc() / self.inner.sample_rate;
 
-        Some(self.inner.amplitude * sinf(2.0 * PI * t * self.inner.frequency + self.inner.phase))
+        Some(self.inner.amplitude * self.func(2.0 * PI * t * self.inner.frequency + self.inner.phase))
     }
 }
 
@@ -140,7 +175,8 @@ mod tests {
                 sample_rate: 0.0,
                 frequency: 0.0,
                 phase: 0.0,
-                amplitude: 1.0
+                amplitude: 1.0,
+                wavefunc: WaveFunc::Sine
             }
         );
     }
@@ -156,6 +192,23 @@ mod tests {
 
         // It must start from the point of origin.
         assert_eq!(res[0], 0.0);
+
+        // The 2s of samples must match exactly.
+        assert_eq!(&res[1..501], &res[501..]);
+    }
+
+    #[test]
+    fn test_wave_iteration_cosine() {
+        let wave = Wave {
+            sample_rate: 500.0,
+            frequency: 130.0,
+            wavefunc: WaveFunc::Cosine,
+            ..Default::default()
+        };
+        let res: Vec<f32> = wave.iter().take(1001).collect();
+
+        // It must start from the point of origin.
+        assert_eq!(res[0], 1.0);
 
         // The 2s of samples must match exactly.
         assert_eq!(&res[1..501], &res[501..]);
