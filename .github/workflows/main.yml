@@ -5,46 +5,123 @@ on:
   pull_request:
     types:
       - opened
-      - synchronized
+      - synchronize
+    paths:
+      - '**.rs'
+      - '**.md'
+      - '.github/workflows/main.yml'
 
   push:
     branches:
       - master
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - nightly
+
     steps:
       - name: Checkout the source code
-        uses: actions/checkout@master
+        uses: actions/checkout@v2
 
-      - name: Install Rust stable
-        run: |
-          rustup toolchain update --no-self-update stable
-          rustup default stable
-          rustup component add clippy rustfmt
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+          components: rustfmt, clippy
 
-      - name: Run rustfmt
-        run: cargo fmt -- --check
+      - name: Run cargo fmt
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
 
-      - name: Run clippy
-        run: cargo clippy --all --all-features -- -Dwarnings
+      - name: Run cargo clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --all --all-features -- -Dwarnings
 
   test:
     name: Test
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - nightly
+
     steps:
       - name: Checkout the source code
-        uses: actions/checkout@master
+        uses: actions/checkout@v2
 
-      - name: Install Rust stable
-        run: |
-          rustup toolchain update --no-self-update stable
-          rustup default stable
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
 
-      - name: Build waver
-        run: cargo build --all --all-features
+      - name: Run cargo test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --all --all-features
 
-      - name: Test waver
-        run: cargo test --all --all-features
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout the source code
+        uses: actions/checkout@v2
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+
+      - name: Run cargo test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --all --all-features
+        env:
+          CARGO_INCREMENTAL: '0'
+          RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests'
+          RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests'
+
+      # Note that `actions-rs/grcov` Action can install `grcov` too,
+      # but can't use faster installation methods yet.
+      # As a temporary experiment `actions-rs/install` Action plugged in here.
+      # Remove once `actions-rs/grcov` can use a faster installation method.
+      - name: Pre-installing grcov
+        uses: actions-rs/install@v0.1
+        with:
+          crate: grcov
+          version: latest
+          use-tool-cache: true
+
+      - name: Gather coverage data
+        id: coverage
+        uses: actions-rs/grcov@v0.1
+
+      - name: Upload coverage data to Coveralls
+        uses: coverallsapp/github-action@master
+        with:
+          parallel: false
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path-to-lcov: ${{ steps.coverage.outputs.report }}
