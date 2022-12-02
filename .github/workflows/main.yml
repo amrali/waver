@@ -6,6 +6,9 @@ on:
     types:
       - opened
       - synchronize
+    paths:
+      - '**.rs'
+      - '**.md'
 
   push:
     branches:
@@ -83,7 +86,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: stable
+          toolchain: nightly
           override: true
 
       - name: Run cargo test
