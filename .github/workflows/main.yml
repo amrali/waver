@@ -16,7 +16,7 @@ on:
       - master
 
 concurrency:
-  group: build-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -108,10 +108,11 @@ jobs:
         id: coverage
         uses: actions-rs/grcov@v0.1
         with:
-          coveralls-token: ${{ secrets.COVERALLS_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload coverage data to Coveralls
-        uses: coverallsapp/github-action@master
+        uses: coverallsapp/github-action@v1
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           parallel: true
           path-to-lcov: ${{ steps.coverage.outputs.report }}
