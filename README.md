@@ -1,4 +1,4 @@
-Waver [![CI](https://github.com/amrali/waver/actions/workflows/main.yml/badge.svg)](https://github.com/amrali/waver/actions/workflows/main.yml) [![Coverage Status](https://coveralls.io/repos/github/amrali/waver/badge.svg?branch=master)](https://coveralls.io/github/amrali/waver?branch=master) [![Crates.io](https://img.shields.io/crates/v/waver.svg?logo=rust)](https://crates.io/crates/waver) [![Documentation](https://img.shields.io/badge/docs-current-blue.svg?logo=rust)](https://docs.rs/waver)
+Waver [![CI](https://github.com/amrali/waver/actions/workflows/main.yml/badge.svg)](https://github.com/amrali/waver/actions/workflows/main.yml) [![codecov](https://codecov.io/gh/amrali/waver/branch/master/graph/badge.svg?token=fN3pEuLaAB)](https://codecov.io/gh/amrali/waver) [![Crates.io](https://img.shields.io/crates/v/waver.svg?logo=rust)](https://crates.io/crates/waver) [![Documentation](https://img.shields.io/badge/docs-current-blue.svg?logo=rust)](https://docs.rs/waver)
 =====
 
 Waver is a simple no-std library to generate any waveform of a given frequency,
