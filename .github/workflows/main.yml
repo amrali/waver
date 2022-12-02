@@ -107,12 +107,10 @@ jobs:
       - name: Gather coverage data
         id: coverage
         uses: actions-rs/grcov@v0.1
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload coverage data to Coveralls
         uses: coverallsapp/github-action@master
         with:
+          parallel: false
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          parallel: true
           path-to-lcov: ${{ steps.coverage.outputs.report }}
