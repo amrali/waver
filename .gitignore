@@ -11,3 +11,7 @@ Cargo.lock
 
 # Ignore ViM swap files
 *.swp
+
+# Ignore code coverage
+lcov.info
+tarpaulin*
