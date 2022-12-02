@@ -95,11 +95,9 @@ jobs:
           override: true
 
       - name: Install Tarpaulin
-        uses: actions-rs/install@v0.1
+        uses: baptiste0928/cargo-install@v1
         with:
           crate: cargo-tarpaulin
-          version: latest
-          use-tool-cache: true
 
       - name: Generate coverage report
         uses: actions-rs/cargo@v1
