@@ -82,10 +82,7 @@ impl Wave {
     /// let res: Vec<f32> = wave.iter().take(10).collect();
     /// ```
     pub fn iter(&self) -> WaveIterator {
-        WaveIterator {
-            inner: self,
-            index: 0.0,
-        }
+        self.into_iter()
     }
 }
 
@@ -167,6 +164,7 @@ impl<'a> Iterator for WaveIterator<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::format;
     use alloc::vec::Vec;
 
     #[test]
@@ -230,5 +228,29 @@ mod tests {
 
         // A cosine wave is a sine wave with a phase shift of Pi / 2.
         assert_eq!(res[0], 1.0);
+    }
+
+    #[test]
+    fn test_wave_function_formatting() {
+        assert_eq!(format!("{}", WaveFunc::Sine), "Sine");
+        assert_eq!(format!("{}", WaveFunc::Cosine), "Cosine");
+    }
+
+    #[test]
+    fn test_wave_formatting() {
+        let wave = Wave {
+            sample_rate: 500.0,
+            frequency: 120.0,
+            phase: PI / 2.0,
+            ..Default::default()
+        };
+
+        let fmt_string = format!("{}", wave);
+
+        // Formatted string should include all wave components
+        assert_eq!(
+            fmt_string,
+            "<Func: Sine, Freq: 120Hz, Ampl: 1, Sampling Freq: 500Hz>"
+        );
     }
 }

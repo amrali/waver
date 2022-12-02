@@ -204,6 +204,14 @@ mod tests {
     }
 
     #[test]
+    fn test_waveform_iteration() {
+        let wf = Waveform::<i8>::new(44100.0);
+        let mut itr = wf.into_iter();
+
+        assert_eq!(itr.next().unwrap(), 0);
+    }
+
+    #[test]
     fn test_waveform_construct() {
         let wf1 = Waveform::<i16>::with_wave(
             44100.0,
