@@ -91,35 +91,22 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: nightly
+          toolchain: stable
           override: true
 
-      - name: Run cargo test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all --all-features
-        env:
-          CARGO_INCREMENTAL: '0'
-          RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests'
-          RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests'
-
-      # Note that `actions-rs/grcov` Action can install `grcov` too,
-      # but can't use faster installation methods yet.
-      # As a temporary experiment `actions-rs/install` Action plugged in here.
-      # Remove once `actions-rs/grcov` can use a faster installation method.
-      - name: Pre-installing grcov
+      - name: Install Tarpaulin
         uses: actions-rs/install@v0.1
         with:
-          crate: grcov
+          crate: cargo-tarpaulin
           version: latest
           use-tool-cache: true
 
-      - name: Gather coverage data
-        id: coverage
-        uses: actions-rs/grcov@v0.1
+      - name: Generate coverage report
+        uses: actions-rs/cargo@v1
+        with:
+          command: cargo tarpaulin --skip-clean --engine llvm --out Html --out lcov
 
       - name: Upload coverage data to Codecov
         uses: codecov/codecov-action@v3
         with:
-          verbose: true
+          files: ./lcov.info
