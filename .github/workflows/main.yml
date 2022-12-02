@@ -9,6 +9,7 @@ on:
     paths:
       - '**.rs'
       - '**.md'
+      - '.github/workflows/main.yml'
 
   push:
     branches:
