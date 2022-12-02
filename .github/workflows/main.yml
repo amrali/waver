@@ -104,6 +104,17 @@ jobs:
           RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests'
           RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests'
 
+      # Note that `actions-rs/grcov` Action can install `grcov` too,
+      # but can't use faster installation methods yet.
+      # As a temporary experiment `actions-rs/install` Action plugged in here.
+      # Remove once `actions-rs/grcov` can use a faster installation method.
+      - name: Pre-installing grcov
+        uses: actions-rs/install@v0.1
+        with:
+          crate: grcov
+          version: latest
+          use-tool-cache: true
+
       - name: Gather coverage data
         id: coverage
         uses: actions-rs/grcov@v0.1
