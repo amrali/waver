@@ -15,36 +15,75 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - nightly
+
     steps:
       - name: Checkout the source code
         uses: actions/checkout@master
 
       - name: Install Rust stable
-        run: |
-          rustup toolchain update --no-self-update stable
-          rustup default stable
-          rustup component add clippy rustfmt
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+          components: rustfmt, clippy
 
-      - name: Run rustfmt
-        run: cargo fmt -- --check
+      - name: Run cargo fmt
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
 
-      - name: Run clippy
-        run: cargo clippy --all --all-features -- -Dwarnings
+      - name: Run cargo clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --all --all-features -- -Dwarnings
 
   test:
     name: Test
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - nightly
+
     steps:
       - name: Checkout the source code
         uses: actions/checkout@master
 
       - name: Install Rust stable
-        run: |
-          rustup toolchain update --no-self-update stable
-          rustup default stable
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
 
-      - name: Build waver
-        run: cargo build --all --all-features
+      - name: Run cargo test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --all --all-features
 
-      - name: Test waver
-        run: cargo test --all --all-features
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Gather coverage data
+        id: coverage
+        uses: actions-rs/grcov@v0.1
+        with:
+          coveralls-token: ${{ secrets.COVERALLS_TOKEN }}
+
+      - name: Upload coverage data to Coveralls
+        uses: coverallsapp/github-action@master
+        with:
+          parallel: true
+          path-to-lcov: ${{ steps.coverage.outputs.report }}
