@@ -100,9 +100,7 @@ jobs:
           crate: cargo-tarpaulin
 
       - name: Generate coverage report
-        uses: actions-rs/cargo@v1
-        with:
-          command: tarpaulin --skip-clean --engine llvm --out Html --out lcov
+        run: cargo-tarpaulin --skip-clean --engine llvm --out Html --out lcov
 
       - name: Upload coverage data to Codecov
         uses: codecov/codecov-action@v3
