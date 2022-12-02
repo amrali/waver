@@ -104,7 +104,7 @@ jobs:
       - name: Generate coverage report
         uses: actions-rs/cargo@v1
         with:
-          command: cargo tarpaulin --skip-clean --engine llvm --out Html --out lcov
+          command: tarpaulin --skip-clean --engine llvm --out Html --out lcov
 
       - name: Upload coverage data to Codecov
         uses: codecov/codecov-action@v3
