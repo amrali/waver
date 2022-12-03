@@ -56,5 +56,8 @@ pub use wave::{Wave, WaveFunc, WaveIterator};
 pub use waveform::{Waveform, WaveformIterator};
 
 // Test README.md
-use doc_comment::doctest;
-doctest!("../README.md");
+#[cfg(doctest)]
+mod readme {
+    use doc_comment::doctest;
+    doctest!("../README.md");
+}
