@@ -19,7 +19,7 @@ use core::{
     fmt,
     iter::{IntoIterator, Iterator},
 };
-use libm::sinf;
+use libm::{copysignf, sinf};
 
 /// An enum that represents the kind of the wave function.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -29,6 +29,9 @@ pub enum WaveFunc {
 
     /// The cosine function.
     Cosine,
+
+    /// The square function.
+    Square,
 }
 
 impl fmt::Display for WaveFunc {
@@ -39,6 +42,7 @@ impl fmt::Display for WaveFunc {
             match self {
                 Self::Sine => "Sine",
                 Self::Cosine => "Cosine",
+                Self::Square => "Square",
             }
         )
     }
@@ -63,7 +67,7 @@ pub struct Wave {
     pub amplitude: f32,
 
     /// The trignomic function to express the wave.
-    pub wavefunc: WaveFunc,
+    pub func: WaveFunc,
 }
 
 impl Wave {
@@ -105,7 +109,7 @@ impl Default for Wave {
             frequency: 0.0,
             phase: 0.0,
             amplitude: 1.0,
-            wavefunc: WaveFunc::Sine,
+            func: WaveFunc::Sine,
         }
     }
 }
@@ -115,7 +119,7 @@ impl fmt::Display for Wave {
         write!(
             f,
             "<Func: {}, Freq: {}Hz, Ampl: {}, Sampling Freq: {}Hz>",
-            self.wavefunc, self.frequency, self.amplitude, self.sample_rate
+            self.func, self.frequency, self.amplitude, self.sample_rate
         )
     }
 }
@@ -141,9 +145,10 @@ impl<'a> WaveIterator<'a> {
     /// Resolve the wave function.
     #[inline]
     fn func(&self, x: f32) -> f32 {
-        match self.inner.wavefunc {
+        match self.inner.func {
             WaveFunc::Sine => sinf(x),
             WaveFunc::Cosine => sinf(PI / 2.0 - x),
+            WaveFunc::Square => copysignf(1.0, sinf(x)),
         }
     }
 }
@@ -178,7 +183,7 @@ mod tests {
                 frequency: 0.0,
                 phase: 0.0,
                 amplitude: 1.0,
-                wavefunc: WaveFunc::Sine
+                func: WaveFunc::Sine
             }
         );
     }
@@ -204,13 +209,33 @@ mod tests {
         let wave = Wave {
             sample_rate: 500.0,
             frequency: 130.0,
-            wavefunc: WaveFunc::Cosine,
+            func: WaveFunc::Cosine,
             ..Default::default()
         };
         let res: Vec<f32> = wave.iter().take(1001).collect();
 
         // It must start from the point of origin.
         assert_eq!(res[0], 1.0);
+
+        // The 2s of samples must match exactly.
+        assert_eq!(&res[1..501], &res[501..]);
+    }
+
+    #[test]
+    fn test_wave_iteration_square() {
+        let wave = Wave {
+            sample_rate: 500.0,
+            frequency: 130.0,
+            func: WaveFunc::Square,
+            ..Default::default()
+        };
+        let res: Vec<f32> = wave.iter().take(1001).collect();
+
+        // It must start from the point of origin.
+        assert_eq!(res[0], 1.0);
+        assert_eq!(res[1], 1.0);
+        assert_eq!(res[2], -1.0);
+        assert_eq!(res[3], -1.0);
 
         // The 2s of samples must match exactly.
         assert_eq!(&res[1..501], &res[501..]);
@@ -234,6 +259,7 @@ mod tests {
     fn test_wave_function_formatting() {
         assert_eq!(format!("{}", WaveFunc::Sine), "Sine");
         assert_eq!(format!("{}", WaveFunc::Cosine), "Cosine");
+        assert_eq!(format!("{}", WaveFunc::Square), "Square");
     }
 
     #[test]
