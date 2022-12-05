@@ -259,6 +259,7 @@ mod tests {
     fn test_wave_function_formatting() {
         assert_eq!(format!("{}", WaveFunc::Sine), "Sine");
         assert_eq!(format!("{}", WaveFunc::Cosine), "Cosine");
+        assert_eq!(format!("{}", WaveFunc::Square), "Square");
     }
 
     #[test]
