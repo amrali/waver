@@ -19,7 +19,7 @@ use core::{
     fmt,
     iter::{IntoIterator, Iterator},
 };
-use libm::{copysignf, sinf};
+use libm::{asinf, copysignf, cosf, sinf};
 
 /// An enum that represents the kind of the wave function.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -32,6 +32,12 @@ pub enum WaveFunc {
 
     /// The square function.
     Square,
+
+    /// The Sawtooth function.
+    Sawtooth,
+
+    /// The Triangle function.
+    Triangle,
 }
 
 impl fmt::Display for WaveFunc {
@@ -43,6 +49,8 @@ impl fmt::Display for WaveFunc {
                 Self::Sine => "Sine",
                 Self::Cosine => "Cosine",
                 Self::Square => "Square",
+                Self::Sawtooth => "Sawtooth",
+                Self::Triangle => "Triangle",
             }
         )
     }
@@ -147,8 +155,10 @@ impl<'a> WaveIterator<'a> {
     fn func(&self, x: f32) -> f32 {
         match self.inner.func {
             WaveFunc::Sine => sinf(x),
-            WaveFunc::Cosine => sinf(PI / 2.0 - x),
+            WaveFunc::Cosine => cosf(x),
             WaveFunc::Square => copysignf(1.0, sinf(x)),
+            WaveFunc::Sawtooth => (x % (2.0 * PI)) / PI - 1.0,
+            WaveFunc::Triangle => 2.0 * asinf(sinf(x)) / PI,
         }
     }
 }
@@ -242,6 +252,48 @@ mod tests {
     }
 
     #[test]
+    fn test_wave_iteration_sawtooth() {
+        let wave = Wave {
+            sample_rate: 500.0,
+            frequency: 130.0,
+            func: WaveFunc::Sawtooth,
+            ..Default::default()
+        };
+        let res: Vec<f32> = wave.iter().take(1001).collect();
+
+        // It must start from the point of origin.
+        assert_eq!(res[0], -1.0);
+        assert_eq!(res[1], -0.47999996);
+        assert_eq!(res[2], 0.04000008);
+        assert_eq!(res[3], 0.5600002);
+        assert_eq!(res[4], -0.91999984);
+
+        // The 2s of samples must match exactly.
+        assert_eq!(&res[1..501], &res[501..]);
+    }
+
+    #[test]
+    fn test_wave_iteration_triangle() {
+        let wave = Wave {
+            sample_rate: 500.0,
+            frequency: 130.0,
+            func: WaveFunc::Triangle,
+            ..Default::default()
+        };
+        let res: Vec<f32> = wave.iter().take(1001).collect();
+
+        // It must start from the point of origin.
+        assert_eq!(res[0], 0.0);
+        assert_eq!(res[1], 0.96);
+        assert_eq!(res[2], -0.08000024);
+        assert_eq!(res[3], -0.8799997);
+        assert_eq!(res[4], 0.16000047);
+
+        // The 2s of samples must match exactly.
+        assert_eq!(&res[1..501], &res[501..]);
+    }
+
+    #[test]
     fn test_wave_phase_shift() {
         let wave = Wave {
             sample_rate: 500.0,
@@ -260,6 +312,8 @@ mod tests {
         assert_eq!(format!("{}", WaveFunc::Sine), "Sine");
         assert_eq!(format!("{}", WaveFunc::Cosine), "Cosine");
         assert_eq!(format!("{}", WaveFunc::Square), "Square");
+        assert_eq!(format!("{}", WaveFunc::Sawtooth), "Sawtooth");
+        assert_eq!(format!("{}", WaveFunc::Triangle), "Triangle");
     }
 
     #[test]
