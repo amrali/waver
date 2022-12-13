@@ -1,13 +1,13 @@
 [package]
 name = "waver"
 description = "waver: waveform generation library"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Amr Ali <amralicc@gmail.com>"]
 license = "Apache-2.0"
 homepage = "https://github.com/amrali/waver/"
 categories = ["no-std", "multimedia::audio", "science", "embedded"]
 keywords = ["signal-processing", "waveform", "wave-generator", "wave"]
-exclude = [".gitignore", ".travis.yml", ".cargo/config"]
+exclude = [".gitignore", ".cargo/config", ".github"]
 readme = "README.md"
 edition = "2021"
 resolver = "2"
