@@ -22,15 +22,16 @@ waver = "0.1"
 
 ```rust
 use std::{vec::Vec, f32::consts::PI};
-use waver::{Waveform, Wave};
+use waver::{Waveform, Wave, WaveFunc};
 
 fn main() {
   // 44.1Khz sampling rate and 16-bit depth.
   let mut wf = waver::Waveform::<i16>::new(44100.0);
 
-  // Superpose a sine wave and a cosine wave.
+  // Superpose a sine wave, a cosine wave and a triangle function.
   wf.superpose(Wave { frequency: 2600.0, ..Default::default() })
     .superpose(Wave { frequency: 2600.0, phase: PI / 2.0, ..Default::default() })
+    .superpose(Wave { frequency: 2600.0, func: WaveFunc::Triangle, ..Default::default() })
     .normalize_amplitudes();
 
   // Quantization of 100 samples
