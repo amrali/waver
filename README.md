@@ -29,10 +29,10 @@ fn main() {
   let mut wf = waver::Waveform::<i16>::new(44100.0);
 
   // Superpose a sine wave, a cosine wave and a triangle function.
-  wf.superpose(Wave { frequency: 2600.0, ..Default::default() })
-    .superpose(Wave { frequency: 2600.0, phase: PI / 2.0, ..Default::default() })
-    .superpose(Wave { frequency: 2600.0, func: WaveFunc::Triangle, ..Default::default() })
-    .normalize_amplitudes();
+  wf.superpose(Wave { frequency: 2600.0, ..Default::default() }).unwrap();
+  wf.superpose(Wave { frequency: 2600.0, phase: PI / 2.0, ..Default::default() }).unwrap();
+  wf.superpose(Wave { frequency: 2600.0, func: WaveFunc::Triangle, ..Default::default() }).unwrap();
+  wf.normalize_amplitudes().unwrap();
 
   // Quantization of 100 samples
   let _output: Vec<i16> = wf.iter().take(100).collect();

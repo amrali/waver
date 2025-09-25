@@ -14,7 +14,7 @@
 
 //! A module for waveform construction and quantization.
 
-use crate::Wave;
+use crate::{error::Error, Wave};
 use alloc::vec::Vec;
 use core::{
     iter::{IntoIterator, Iterator},
@@ -79,14 +79,14 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     ///     Wave { frequency: 4000.0, ..Default::default() });
     /// ```
     pub fn with_wave(sample_rate: f32, wave: Wave) -> Self {
-        Self::new(sample_rate).superpose(wave).clone()
+        Self::new(sample_rate).superpose(wave).unwrap().clone()
     }
 
     /// Add a wave component.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// This function will panic if the waveform is not generative.
+    /// This function will return an error if the waveform is not generative.
     ///
     /// # Examples
     ///
@@ -95,18 +95,19 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     ///
     /// let mut wf = Waveform::<i16>::new(44100.0);
     /// wf.superpose(Wave { frequency: 6000.0, amplitude: 0.25, ..Default::default() })
+    ///     .unwrap()
     ///     .superpose(Wave { frequency: 5500.0, amplitude: 0.75, ..Default::default() });
     /// ```
-    pub fn superpose(&mut self, wave: Wave) -> &mut Self {
+    pub fn superpose(&mut self, wave: Wave) -> Result<&mut Self, Error> {
         if let WaveformSource::Generative(components) = &mut self.source {
             components.push(Wave {
                 sample_rate: self.sample_rate,
                 ..wave
             });
+            Ok(self)
         } else {
-            panic!("Cannot superpose on a recorded waveform");
+            Err(Error::UnsupportedSource)
         }
-        self
     }
 
     /// Normalize amplitude weights of all underlying waves.
@@ -119,9 +120,9 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     ///
     /// Use this method to normalize all weights to equal shares of the amplitude.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// This function will panic if the waveform is not generative.
+    /// This function will return an error if the waveform is not generative.
     ///
     /// # Examples
     ///
@@ -131,18 +132,18 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     /// // Two waves with an amplitude weights of 150%.
     /// let mut wf = Waveform::<i16>::with_wave(44100.0,
     ///     Wave { frequency: 3000.0, amplitude: 1.0, ..Default::default() });
-    /// wf.superpose(Wave { frequency: 4000.0, amplitude: 0.5, ..Default::default() }).normalize_amplitudes();
+    /// wf.superpose(Wave { frequency: 4000.0, amplitude: 0.5, ..Default::default() }).unwrap().normalize_amplitudes();
     /// ```
-    pub fn normalize_amplitudes(&mut self) -> &mut Self {
+    pub fn normalize_amplitudes(&mut self) -> Result<&mut Self, Error> {
         if let WaveformSource::Generative(components) = &mut self.source {
             let amp_ratio = 1.0 / components.len() as f32;
             components
                 .iter_mut()
                 .for_each(|c| c.amplitude = amp_ratio);
+            Ok(self)
         } else {
-            panic!("Cannot normalize amplitudes on a recorded waveform");
+            Err(Error::UnsupportedSource)
         }
-        self
     }
 
     /// Creates a `Waveform` from a WAV byte slice.
@@ -175,8 +176,12 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     /// use waver::{Waveform, Wave};
     ///
     /// let mut wf = Waveform::<i16>::new(44100.0);
-    /// let res: Vec<i16> = wf.superpose(Wave { frequency: 4000.0, phase: PI / 2.0, ..Default::default() })
-    ///     .iter().take(10).collect();
+    /// wf.superpose(Wave { frequency: 4000.0, phase: PI / 2.0, ..Default::default() });
+    /// let mut iter = wf.iter();
+    /// let mut res = Vec::new();
+    /// for _ in 0..10 {
+    ///     res.push(iter.next().unwrap());
+    /// }
     /// ```
     pub fn iter(&self) -> WaveformIterator<BitDepth> {
         let iter_source = match &self.source {
@@ -294,14 +299,17 @@ mod tests {
         let mut wf2 = Waveform::<i16>::new(44100.0);
 
         let v1: Vec<i16> = wf1.iter().take(100).collect();
-        let v2: Vec<i16> = wf2
+        let mut v2 = Vec::new();
+        let mut wf2_iter = wf2
             .superpose(Wave {
                 frequency: 3400.0,
                 ..Default::default()
             })
-            .iter()
-            .take(100)
-            .collect();
+            .unwrap()
+            .iter();
+        for _ in 0..100 {
+            v2.push(wf2_iter.next().unwrap());
+        }
 
         assert_eq!(v1, v2);
     }
@@ -321,7 +329,9 @@ mod tests {
             amplitude: 0.5,
             ..Default::default()
         })
-        .normalize_amplitudes();
+        .unwrap()
+        .normalize_amplitudes()
+        .unwrap();
 
         if let WaveformSource::Generative(components) = wf.source {
             components
@@ -330,6 +340,20 @@ mod tests {
         } else {
             panic!("Expected generative waveform");
         }
+    }
+
+    #[test]
+    fn test_superpose_on_recorded_error() {
+        let mut wf = Waveform::<i16>::from_recorded_samples(44100.0, &[]);
+        let err = wf.superpose(Wave::default()).unwrap_err();
+        assert_eq!(err, Error::UnsupportedSource);
+    }
+
+    #[test]
+    fn test_normalize_on_recorded_error() {
+        let mut wf = Waveform::<i16>::from_recorded_samples(44100.0, &[]);
+        let err = wf.normalize_amplitudes().unwrap_err();
+        assert_eq!(err, Error::UnsupportedSource);
     }
 
     #[test]
@@ -342,15 +366,22 @@ mod tests {
                 ..Default::default()
             },
         );
-        let v: Vec<i16> = wf
+        let mut v = Vec::new();
+        let mut iter = wf
             .superpose(Wave {
                 frequency: 5000.0,
                 amplitude: 0.5,
                 ..Default::default()
             })
-            .iter()
-            .take(100)
-            .collect();
+            .unwrap()
+            .iter();
+        for _ in 0..100 {
+            if let Some(sample) = iter.next() {
+                v.push(sample);
+            } else {
+                break;
+            }
+        }
 
         assert_ne!(v.len(), 100);
     }
