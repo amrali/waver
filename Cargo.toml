@@ -15,9 +15,13 @@ resolver = "2"
 [dependencies]
 libm = "0.2"
 num-traits = { version = "0.2", default-features = false }
+nwav = { version = "0.1", default-features = false }
+num-complex = { version = "0.4", default-features = false, features = ["libm"] }
+rustfft = { version = "6.1", default-features = false }
 
 [dev-dependencies]
 doc-comment = "0.3"
+hound = "3.5"
 
 [profile.release]
 lto = true

@@ -14,7 +14,7 @@
 
 //! A module for waveform construction and quantization.
 
-use crate::{Wave, WaveIterator};
+use crate::Wave;
 use alloc::vec::Vec;
 use core::{
     iter::{IntoIterator, Iterator},
@@ -22,11 +22,27 @@ use core::{
 };
 use num_traits::{AsPrimitive, Bounded, NumCast};
 
-/// A structure that represent a waveform.
+/// An enum that represents the source of the waveform.
+#[derive(Debug, Clone)]
+pub enum WaveformSource {
+    /// A generative waveform that is a superposition of a number of simple
+    /// sinusoidal waves.
+    Generative(Vec<Wave>),
+
+    /// A recorded waveform from a source like a WAV file.
+    Recorded(Vec<i16>),
+}
+
+/// A structure that represents a complex waveform.
 #[derive(Debug, Clone)]
 pub struct Waveform<BitDepth: Clone> {
-    sample_rate: f32,
-    components: Vec<Wave>,
+    /// The source of the waveform.
+    pub source: WaveformSource,
+
+    /// The sampling rate of this waveform.
+    pub sample_rate: f32,
+
+    /// Phantom data to hold the bit depth.
     _marker: PhantomData<BitDepth>,
 }
 
@@ -45,7 +61,7 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     pub fn new(sample_rate: f32) -> Self {
         Self {
             sample_rate,
-            components: Vec::new(),
+            source: WaveformSource::Generative(Vec::new()),
             _marker: PhantomData,
         }
     }
@@ -68,6 +84,10 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
 
     /// Add a wave component.
     ///
+    /// # Panics
+    ///
+    /// This function will panic if the waveform is not generative.
+    ///
     /// # Examples
     ///
     /// ```
@@ -78,10 +98,14 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     ///     .superpose(Wave { frequency: 5500.0, amplitude: 0.75, ..Default::default() });
     /// ```
     pub fn superpose(&mut self, wave: Wave) -> &mut Self {
-        self.components.push(Wave {
-            sample_rate: self.sample_rate,
-            ..wave
-        });
+        if let WaveformSource::Generative(components) = &mut self.source {
+            components.push(Wave {
+                sample_rate: self.sample_rate,
+                ..wave
+            });
+        } else {
+            panic!("Cannot superpose on a recorded waveform");
+        }
         self
     }
 
@@ -95,6 +119,10 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     ///
     /// Use this method to normalize all weights to equal shares of the amplitude.
     ///
+    /// # Panics
+    ///
+    /// This function will panic if the waveform is not generative.
+    ///
     /// # Examples
     ///
     /// ```
@@ -106,17 +134,38 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     /// wf.superpose(Wave { frequency: 4000.0, amplitude: 0.5, ..Default::default() }).normalize_amplitudes();
     /// ```
     pub fn normalize_amplitudes(&mut self) -> &mut Self {
-        let amp_ratio = 1.0 / self.components.len() as f32;
-        self.components
-            .iter_mut()
-            .for_each(|c| c.amplitude = amp_ratio);
+        if let WaveformSource::Generative(components) = &mut self.source {
+            let amp_ratio = 1.0 / components.len() as f32;
+            components
+                .iter_mut()
+                .for_each(|c| c.amplitude = amp_ratio);
+        } else {
+            panic!("Cannot normalize amplitudes on a recorded waveform");
+        }
         self
     }
 
-    /// An infinite iterator for the superposition of all underlying waveform components.
+    /// Creates a `Waveform` from a WAV byte slice.
     ///
-    /// The iterator will produce a quantization of the superposition of waveform
-    /// components at the waveform sampling frequency.
+    /// # Arguments
+    ///
+    /// * `bytes` - A byte slice representing the WAV file.
+    ///
+    /// # Returns
+    ///
+    /// An `Option` containing the `Waveform`.
+    pub fn from_recorded_samples(sample_rate: f32, samples: &[i16]) -> Self {
+        Self {
+            sample_rate,
+            source: WaveformSource::Recorded(samples.to_vec()),
+            _marker: PhantomData,
+        }
+    }
+
+    /// An iterator for the superposition of all underlying waveform components.
+    ///
+    /// If the waveform is generative, the iterator is infinite. If the waveform
+    /// is recorded, the iterator will have a finite length.
     ///
     /// # Examples
     ///
@@ -130,45 +179,66 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     ///     .iter().take(10).collect();
     /// ```
     pub fn iter(&self) -> WaveformIterator<BitDepth> {
+        let iter_source = match &self.source {
+            WaveformSource::Generative(components) => {
+                let iters = components.iter().map(|c| c.iter()).collect();
+                WaveformIteratorSource::Generative(iters)
+            }
+            WaveformSource::Recorded(data) => WaveformIteratorSource::Recorded(data.iter()),
+        };
+
         WaveformIterator {
             _inner: self,
-            iters: self.components.iter().map(|c| c.iter()).collect(),
+            source: iter_source,
         }
     }
 }
 
-impl<'a, BitDepth: Bounded + NumCast + AsPrimitive<f32>> IntoIterator for &'a Waveform<BitDepth> {
+impl<'a, BitDepth: Bounded + NumCast + AsPrimitive<f32> + Clone> IntoIterator for &'a Waveform<BitDepth> {
     type Item = BitDepth;
     type IntoIter = WaveformIterator<'a, BitDepth>;
 
     fn into_iter(self) -> Self::IntoIter {
-        WaveformIterator {
-            _inner: self,
-            iters: self.components.iter().map(|c| c.iter()).collect(),
-        }
+        self.iter()
     }
 }
 
-/// Iterator for Waveform structure.
-#[derive(Debug, Clone)]
-pub struct WaveformIterator<'a, BitDepth: Clone> {
-    _inner: &'a Waveform<BitDepth>,
-    iters: Vec<WaveIterator<'a>>,
+/// The source for the WaveformIterator.
+#[derive(Clone)]
+pub enum WaveformIteratorSource<'a> {
+    /// An iterator for a generative waveform.
+    Generative(Vec<crate::WaveIterator<'a>>),
+
+    /// An iterator for a recorded waveform.
+    Recorded(core::slice::Iter<'a, i16>),
 }
 
-impl<'a, BitDepth: Bounded + NumCast + AsPrimitive<f32>> Iterator
+/// Iterator for Waveform structure.
+#[derive(Clone)]
+pub struct WaveformIterator<'a, BitDepth: Clone> {
+    _inner: &'a Waveform<BitDepth>,
+    source: WaveformIteratorSource<'a>,
+}
+
+impl<'a, BitDepth: Bounded + NumCast + AsPrimitive<f32> + Clone> Iterator
     for WaveformIterator<'a, BitDepth>
 {
     type Item = BitDepth;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // Superpose all waveform components.
-        let superposition: f32 = self
-            .iters
-            .iter_mut()
-            .map(|x| x.next().expect("waves are infinite"))
-            .sum();
-        NumCast::from(superposition * BitDepth::max_value().as_())
+        match &mut self.source {
+            WaveformIteratorSource::Generative(iters) => {
+                // Superpose all waveform components.
+                let superposition: f32 = iters
+                    .iter_mut()
+                    .map(|x| x.next().expect("waves are infinite"))
+                    .sum();
+                NumCast::from(superposition * BitDepth::max_value().as_())
+            }
+            WaveformIteratorSource::Recorded(iter) => {
+                iter.next().map(|&sample| NumCast::from(sample).unwrap())
+            }
+        }
     }
 }
 
@@ -253,9 +323,13 @@ mod tests {
         })
         .normalize_amplitudes();
 
-        wf.components
-            .iter()
-            .for_each(|c| assert_eq!(c.amplitude, 0.5));
+        if let WaveformSource::Generative(components) = wf.source {
+            components
+                .iter()
+                .for_each(|c| assert_eq!(c.amplitude, 0.5));
+        } else {
+            panic!("Expected generative waveform");
+        }
     }
 
     #[test]
@@ -279,5 +353,24 @@ mod tests {
             .collect();
 
         assert_ne!(v.len(), 100);
+    }
+
+    #[test]
+    fn test_from_recorded_samples() {
+        let samples = vec![0, 1, 2, 3, 4];
+        let wf = Waveform::<i16>::from_recorded_samples(44100.0, &samples);
+        if let WaveformSource::Recorded(data) = wf.source {
+            assert_eq!(data, samples);
+        } else {
+            panic!("Expected recorded waveform");
+        }
+    }
+
+    #[test]
+    fn test_recorded_waveform_iteration() {
+        let samples = vec![0, 1, 2, 3, 4];
+        let wf = Waveform::<i16>::from_recorded_samples(44100.0, &samples);
+        let collected: Vec<i16> = wf.iter().collect();
+        assert_eq!(collected, samples);
     }
 }

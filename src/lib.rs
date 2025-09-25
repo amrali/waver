@@ -50,11 +50,12 @@
 
 extern crate alloc;
 
+pub mod analysis;
 mod wave;
 mod waveform;
 
 pub use wave::{Wave, WaveFunc, WaveIterator};
-pub use waveform::{Waveform, WaveformIterator};
+pub use waveform::{Waveform, WaveformIterator, WaveformSource};
 
 // Test README.md
 #[cfg(doctest)]
