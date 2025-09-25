@@ -46,13 +46,15 @@ fn main() {
 * Wave superposition with weighted amplitudes.
 * Modulate signal's frequency, amplitude or phase.
 * Numerically stable, prevents clipping.
+* **Signal Analysis**: Perform frequency analysis (FFT) and time-based frequency analysis (STFT) on recorded signals.
+* **Waveform Synthesis**: Create a generative waveform from a recorded one by analyzing its harmonic structure.
 
 ## TODO
 
 * [ ] Implement checks to protect against aliasing (e.g., disallow frequencies above the Nyquist frequency).
 * [ ] Use fixed-point arithmetic for platforms that doesn't have an FPU.
 * [ ] Replace use of libm crate [when math support moves to libcore].
-* [ ] Expand the crate features to also include signal analysis functionality.
+* [ ] Improve synthesis to account for phase and amplitude variations over time.
 
 ## Contributing
 

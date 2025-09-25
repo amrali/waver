@@ -14,6 +14,9 @@
 
 //! A module for the library's error types.
 
+//! This module contains the unified error type for the `waver` library,
+//! allowing for consistent and predictable error handling across all modules.
+
 /// The error type for the waver library.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {

@@ -13,6 +13,10 @@
 //   limitations under the License.
 
 //! A module for `no-std` signal analysis.
+
+//! This module provides functions for analyzing `Waveform` instances,
+//! including frequency analysis (FFT), time-based frequency analysis (STFT),
+//! and waveform synthesis.
 use crate::{
     error::Error,
     waveform::{Waveform, WaveformSource},
