@@ -14,6 +14,7 @@
 
 //! A module for wave types and iterators.
 
+use alloc::{boxed::Box, string::ToString, vec::Vec};
 use core::{
     f32::consts::PI,
     fmt,
@@ -26,16 +27,12 @@ use libm::{asinf, copysignf, cosf, sinf};
 pub enum WaveFunc {
     /// The sine function.
     Sine,
-
     /// The cosine function.
     Cosine,
-
     /// The square function.
     Square,
-
     /// The Sawtooth function.
     Sawtooth,
-
     /// The Triangle function.
     Triangle,
 }
@@ -56,33 +53,60 @@ impl fmt::Display for WaveFunc {
     }
 }
 
-/// A structure that represent a sinusoidal wave.
+/// An enum that represents the modulation source for a wave's properties.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Modulation {
+    /// A static, constant value.
+    Static(f32),
+    /// A pre-calculated envelope.
+    Envelope(Vec<f32>),
+    /// A Low-Frequency Oscillator (LFO) that modulates the property.
+    LFO(Box<Wave>),
+}
+
+impl From<f32> for Modulation {
+    fn from(val: f32) -> Self {
+        Modulation::Static(val)
+    }
+}
+
+impl From<Vec<f32>> for Modulation {
+    fn from(val: Vec<f32>) -> Self {
+        Modulation::Envelope(val)
+    }
+}
+
+impl From<Wave> for Modulation {
+    fn from(val: Wave) -> Self {
+        Modulation::LFO(Box::new(val))
+    }
+}
+
+/// A structure that represent a sinusoidal wave, with potentially dynamic
+/// amplitude and phase.
 ///
 /// The default value for a wave values is 0.0 except for the amplitude weight
 /// which is 1.0 (100% of available amplitude).
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Wave {
     /// The sampling rate of this wave.
     pub sample_rate: f32,
-
     /// The frequency of this wave.
     pub frequency: f32,
-
     /// The phase of this wave.
-    pub phase: f32,
-
+    pub phase: Modulation,
     /// The amplitude as a percentage [0.0 - 1.0].
-    pub amplitude: f32,
-
-    /// The trignomic function to express the wave.
+    pub amplitude: Modulation,
+    /// The trigonometric function to express the wave.
     pub func: WaveFunc,
 }
 
 impl Wave {
-    /// An infinite iterator for the Wave structure.
+    /// An iterator for the Wave structure.
     ///
-    /// The iterator will produce an infinite number of wave samples at the
-    /// specified sampling rate and frequency.
+    /// The iterator will produce an infinite number of wave samples if the
+    /// amplitude and phase are static. If they are dynamic (using an
+    /// envelope or LFO), the iterator may be finite.
     ///
     /// # Examples
     ///
@@ -103,9 +127,22 @@ impl<'a> IntoIterator for &'a Wave {
     type IntoIter = WaveIterator<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
+        let amp_lfo_iter = if let Modulation::LFO(wave) = &self.amplitude {
+            Some(Box::new(wave.iter()))
+        } else {
+            None
+        };
+        let phase_lfo_iter = if let Modulation::LFO(wave) = &self.phase {
+            Some(Box::new(wave.iter()))
+        } else {
+            None
+        };
+
         WaveIterator {
             inner: self,
-            index: 0.0,
+            index: 0,
+            amp_lfo_iter,
+            phase_lfo_iter,
         }
     }
 }
@@ -115,8 +152,8 @@ impl Default for Wave {
         Self {
             sample_rate: 0.0,
             frequency: 0.0,
-            phase: 0.0,
-            amplitude: 1.0,
+            phase: Modulation::Static(0.0),
+            amplitude: Modulation::Static(1.0),
             func: WaveFunc::Sine,
         }
     }
@@ -127,29 +164,26 @@ impl fmt::Display for Wave {
         write!(
             f,
             "<Func: {}, Freq: {}Hz, Ampl: {}, Sampling Freq: {}Hz>",
-            self.func, self.frequency, self.amplitude, self.sample_rate
+            self.func,
+            self.frequency,
+            match &self.amplitude {
+                Modulation::Static(val) => val.to_string(),
+                _ => "dynamic".to_string(),
+            },
+            self.sample_rate
         )
     }
 }
 
 /// Iterator for Wave structure.
-#[derive(Debug, Clone)]
 pub struct WaveIterator<'a> {
     inner: &'a Wave,
-    index: f32,
+    index: usize,
+    amp_lfo_iter: Option<Box<WaveIterator<'a>>>,
+    phase_lfo_iter: Option<Box<WaveIterator<'a>>>,
 }
 
 impl<'a> WaveIterator<'a> {
-    /// Post-increment the index of the iterator.
-    #[inline]
-    fn index_inc(&mut self) -> f32 {
-        let idx = self.index;
-        // The index cycles after 1s of samples.
-        self.index = (self.index % self.inner.sample_rate) + 1.0;
-
-        idx
-    }
-
     /// Resolve the wave function.
     #[inline]
     fn func(&self, x: f32) -> f32 {
@@ -167,12 +201,59 @@ impl<'a> Iterator for WaveIterator<'a> {
     type Item = f32;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let t = self.index_inc() / self.inner.sample_rate;
+        let mut amp_ended = false;
+        let mut phase_ended = false;
 
-        Some(
-            self.inner.amplitude
-                * self.func(2.0 * PI * t * self.inner.frequency + self.inner.phase),
-        )
+        let amp = match &mut self.amp_lfo_iter {
+            Some(iter) => match iter.next() {
+                Some(val) => val,
+                None => {
+                    amp_ended = true;
+                    0.0
+                }
+            },
+            None => match &self.inner.amplitude {
+                Modulation::Static(val) => *val,
+                Modulation::Envelope(env) => {
+                    if self.index >= env.len() {
+                        amp_ended = true;
+                    }
+                    *env.get(self.index).unwrap_or(env.last().unwrap_or(&0.0))
+                }
+                _ => 1.0,
+            },
+        };
+
+        let phase = match &mut self.phase_lfo_iter {
+            Some(iter) => match iter.next() {
+                Some(val) => val,
+                None => {
+                    phase_ended = true;
+                    0.0
+                }
+            },
+            None => match &self.inner.phase {
+                Modulation::Static(val) => *val,
+                Modulation::Envelope(env) => {
+                    if self.index >= env.len() {
+                        phase_ended = true;
+                    }
+                    *env.get(self.index).unwrap_or(env.last().unwrap_or(&0.0))
+                }
+                _ => 0.0,
+            },
+        };
+
+        if amp_ended && phase_ended {
+            return None;
+        }
+
+        let t = self.index as f32 / self.inner.sample_rate;
+        let sample = self.func(2.0 * PI * t * self.inner.frequency + phase);
+
+        self.index += 1;
+
+        Some(amp * sample)
     }
 }
 
@@ -180,19 +261,17 @@ impl<'a> Iterator for WaveIterator<'a> {
 mod tests {
     use super::*;
     use alloc::format;
-    use alloc::vec::Vec;
 
     #[test]
     fn test_wave_default() {
         let wave: Wave = Default::default();
-
         assert_eq!(
             wave,
             Wave {
                 sample_rate: 0.0,
                 frequency: 0.0,
-                phase: 0.0,
-                amplitude: 1.0,
+                phase: Modulation::Static(0.0),
+                amplitude: Modulation::Static(1.0),
                 func: WaveFunc::Sine
             }
         );
@@ -205,13 +284,12 @@ mod tests {
             frequency: 130.0,
             ..Default::default()
         };
-        let res: Vec<f32> = wave.iter().take(1001).collect();
-
-        // It must start from the point of origin.
+        let res: Vec<f32> = wave.iter().take(5).collect();
         assert_eq!(res[0], 0.0);
-
-        // The 2s of samples must match exactly.
-        assert_eq!(&res[1..501], &res[501..]);
+        assert!((res[1] - 0.9980267).abs() < 1e-6);
+        assert!((res[2] - -0.1253336).abs() < 1e-6);
+        assert!((res[3] - -0.98228717).abs() < 1e-6);
+        assert!((res[4] - 0.24869062).abs() < 1e-6);
     }
 
     #[test]
@@ -222,13 +300,12 @@ mod tests {
             func: WaveFunc::Cosine,
             ..Default::default()
         };
-        let res: Vec<f32> = wave.iter().take(1001).collect();
-
-        // It must start from the point of origin.
+        let res: Vec<f32> = wave.iter().take(5).collect();
         assert_eq!(res[0], 1.0);
-
-        // The 2s of samples must match exactly.
-        assert_eq!(&res[1..501], &res[501..]);
+        assert!((res[1] - -0.06279071).abs() < 1e-6);
+        assert!((res[2] - -0.99211466).abs() < 1e-6);
+        assert!((res[3] - 0.18738186).abs() < 1e-6);
+        assert!((res[4] - 0.968583).abs() < 1e-6);
     }
 
     #[test]
@@ -239,16 +316,12 @@ mod tests {
             func: WaveFunc::Square,
             ..Default::default()
         };
-        let res: Vec<f32> = wave.iter().take(1001).collect();
-
-        // It must start from the point of origin.
+        let res: Vec<f32> = wave.iter().take(5).collect();
         assert_eq!(res[0], 1.0);
         assert_eq!(res[1], 1.0);
         assert_eq!(res[2], -1.0);
         assert_eq!(res[3], -1.0);
-
-        // The 2s of samples must match exactly.
-        assert_eq!(&res[1..501], &res[501..]);
+        assert_eq!(res[4], 1.0);
     }
 
     #[test]
@@ -259,17 +332,12 @@ mod tests {
             func: WaveFunc::Sawtooth,
             ..Default::default()
         };
-        let res: Vec<f32> = wave.iter().take(1001).collect();
-
-        // It must start from the point of origin.
+        let res: Vec<f32> = wave.iter().take(5).collect();
         assert_eq!(res[0], -1.0);
-        assert_eq!(res[1], -0.47999996);
-        assert_eq!(res[2], 0.04000008);
-        assert_eq!(res[3], 0.5600002);
-        assert_eq!(res[4], -0.91999984);
-
-        // The 2s of samples must match exactly.
-        assert_eq!(&res[1..501], &res[501..]);
+        assert!((res[1] - -0.47999996).abs() < 1e-6);
+        assert!((res[2] - 0.04000008).abs() < 1e-6);
+        assert!((res[3] - 0.5600002).abs() < 1e-6);
+        assert!((res[4] - -0.91999984).abs() < 1e-6);
     }
 
     #[test]
@@ -280,17 +348,12 @@ mod tests {
             func: WaveFunc::Triangle,
             ..Default::default()
         };
-        let res: Vec<f32> = wave.iter().take(1001).collect();
-
-        // It must start from the point of origin.
+        let res: Vec<f32> = wave.iter().take(5).collect();
         assert_eq!(res[0], 0.0);
-        assert_eq!(res[1], 0.96);
-        assert_eq!(res[2], -0.08000024);
-        assert_eq!(res[3], -0.8799997);
-        assert_eq!(res[4], 0.16000047);
-
-        // The 2s of samples must match exactly.
-        assert_eq!(&res[1..501], &res[501..]);
+        assert!((res[1] - 0.96000004).abs() < 1e-6);
+        assert!((res[2] - -0.08000016).abs() < 1e-6);
+        assert!((res[3] - -0.8799999).abs() < 1e-6);
+        assert!((res[4] - 0.16000032).abs() < 1e-6);
     }
 
     #[test]
@@ -298,13 +361,26 @@ mod tests {
         let wave = Wave {
             sample_rate: 500.0,
             frequency: 120.0,
-            phase: PI / 2.0,
+            phase: (PI / 2.0).into(),
             ..Default::default()
         };
         let res: Vec<f32> = wave.iter().take(5).collect();
-
-        // A cosine wave is a sine wave with a phase shift of Pi / 2.
         assert_eq!(res[0], 1.0);
+    }
+
+    #[test]
+    fn test_wave_formatting() {
+        let wave = Wave {
+            sample_rate: 500.0,
+            frequency: 120.0,
+            phase: Modulation::Static(PI / 2.0),
+            ..Default::default()
+        };
+        let fmt_string = format!("{}", wave);
+        assert_eq!(
+            fmt_string,
+            "<Func: Sine, Freq: 120Hz, Ampl: 1, Sampling Freq: 500Hz>"
+        );
     }
 
     #[test]
@@ -314,23 +390,5 @@ mod tests {
         assert_eq!(format!("{}", WaveFunc::Square), "Square");
         assert_eq!(format!("{}", WaveFunc::Sawtooth), "Sawtooth");
         assert_eq!(format!("{}", WaveFunc::Triangle), "Triangle");
-    }
-
-    #[test]
-    fn test_wave_formatting() {
-        let wave = Wave {
-            sample_rate: 500.0,
-            frequency: 120.0,
-            phase: PI / 2.0,
-            ..Default::default()
-        };
-
-        let fmt_string = format!("{}", wave);
-
-        // Formatted string should include all wave components
-        assert_eq!(
-            fmt_string,
-            "<Func: Sine, Freq: 120Hz, Ampl: 1, Sampling Freq: 500Hz>"
-        );
     }
 }

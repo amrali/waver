@@ -14,7 +14,7 @@
 
 //! A module for waveform construction and quantization.
 
-use crate::{error::Error, Wave};
+use crate::{error::Error, Wave, WaveIterator};
 use alloc::vec::Vec;
 use core::{
     iter::{IntoIterator, Iterator},
@@ -79,7 +79,9 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     ///     Wave { frequency: 4000.0, ..Default::default() });
     /// ```
     pub fn with_wave(sample_rate: f32, wave: Wave) -> Self {
-        Self::new(sample_rate).superpose(wave).unwrap().clone()
+        let mut wf = Self::new(sample_rate);
+        wf.superpose(wave).unwrap();
+        wf
     }
 
     /// Add a wave component.
@@ -94,9 +96,9 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     /// use waver::{Waveform, Wave};
     ///
     /// let mut wf = Waveform::<i16>::new(44100.0);
-    /// wf.superpose(Wave { frequency: 6000.0, amplitude: 0.25, ..Default::default() })
+    /// wf.superpose(Wave { frequency: 6000.0, amplitude: 0.25.into(), ..Default::default() })
     ///     .unwrap()
-    ///     .superpose(Wave { frequency: 5500.0, amplitude: 0.75, ..Default::default() });
+    ///     .superpose(Wave { frequency: 5500.0, amplitude: 0.75.into(), ..Default::default() });
     /// ```
     pub fn superpose(&mut self, wave: Wave) -> Result<&mut Self, Error> {
         if let WaveformSource::Generative(components) = &mut self.source {
@@ -131,30 +133,22 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     ///
     /// // Two waves with an amplitude weights of 150%.
     /// let mut wf = Waveform::<i16>::with_wave(44100.0,
-    ///     Wave { frequency: 3000.0, amplitude: 1.0, ..Default::default() });
-    /// wf.superpose(Wave { frequency: 4000.0, amplitude: 0.5, ..Default::default() }).unwrap().normalize_amplitudes();
+    ///     Wave { frequency: 3000.0, amplitude: 1.0.into(), ..Default::default() });
+    /// wf.superpose(Wave { frequency: 4000.0, amplitude: 0.5.into(), ..Default::default() }).unwrap().normalize_amplitudes().unwrap();
     /// ```
     pub fn normalize_amplitudes(&mut self) -> Result<&mut Self, Error> {
         if let WaveformSource::Generative(components) = &mut self.source {
             let amp_ratio = 1.0 / components.len() as f32;
             components
                 .iter_mut()
-                .for_each(|c| c.amplitude = amp_ratio);
+                .for_each(|c| c.amplitude = amp_ratio.into());
             Ok(self)
         } else {
             Err(Error::UnsupportedSource)
         }
     }
 
-    /// Creates a `Waveform` from a WAV byte slice.
-    ///
-    /// # Arguments
-    ///
-    /// * `bytes` - A byte slice representing the WAV file.
-    ///
-    /// # Returns
-    ///
-    /// An `Option` containing the `Waveform`.
+    /// Creates a `Waveform` from a recorded sample buffer.
     pub fn from_recorded_samples(sample_rate: f32, samples: &[i16]) -> Self {
         Self {
             sample_rate,
@@ -172,11 +166,10 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     ///
     /// ```
     /// use std::f32::consts::PI;
-    /// use std::vec::Vec;
     /// use waver::{Waveform, Wave};
     ///
     /// let mut wf = Waveform::<i16>::new(44100.0);
-    /// wf.superpose(Wave { frequency: 4000.0, phase: PI / 2.0, ..Default::default() });
+    /// wf.superpose(Wave { frequency: 4000.0, phase: (PI / 2.0).into(), ..Default::default() }).unwrap();
     /// let mut iter = wf.iter();
     /// let mut res = Vec::new();
     /// for _ in 0..10 {
@@ -209,17 +202,15 @@ impl<'a, BitDepth: Bounded + NumCast + AsPrimitive<f32> + Clone> IntoIterator fo
 }
 
 /// The source for the WaveformIterator.
-#[derive(Clone)]
 pub enum WaveformIteratorSource<'a> {
     /// An iterator for a generative waveform.
-    Generative(Vec<crate::WaveIterator<'a>>),
+    Generative(Vec<WaveIterator<'a>>),
 
     /// An iterator for a recorded waveform.
     Recorded(core::slice::Iter<'a, i16>),
 }
 
 /// Iterator for Waveform structure.
-#[derive(Clone)]
 pub struct WaveformIterator<'a, BitDepth: Clone> {
     _inner: &'a Waveform<BitDepth>,
     source: WaveformIteratorSource<'a>,
@@ -233,10 +224,13 @@ impl<'a, BitDepth: Bounded + NumCast + AsPrimitive<f32> + Clone> Iterator
     fn next(&mut self) -> Option<Self::Item> {
         match &mut self.source {
             WaveformIteratorSource::Generative(iters) => {
+                if iters.is_empty() {
+                    return Some(NumCast::from(0.0).unwrap());
+                }
                 // Superpose all waveform components.
                 let superposition: f32 = iters
                     .iter_mut()
-                    .map(|x| x.next().expect("waves are infinite"))
+                    .map(|x| x.next().unwrap_or(0.0))
                     .sum();
                 NumCast::from(superposition * BitDepth::max_value().as_())
             }
@@ -250,6 +244,7 @@ impl<'a, BitDepth: Bounded + NumCast + AsPrimitive<f32> + Clone> Iterator
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Modulation, Wave};
     use core::i16;
 
     #[test]
@@ -259,7 +254,7 @@ mod tests {
             frequency: 3000.0,
             ..Default::default()
         };
-        let wf = Waveform::<i16>::with_wave(44100.0, w3khz);
+        let wf = Waveform::<i16>::with_wave(44100.0, w3khz.clone());
 
         let w1: Vec<i16> = wf.iter().take(100).collect();
         let w2: Vec<i16> = w3khz
@@ -292,24 +287,19 @@ mod tests {
             44100.0,
             Wave {
                 frequency: 3400.0,
-                amplitude: 1.0,
+                amplitude: 1.0.into(),
                 ..Default::default()
             },
         );
         let mut wf2 = Waveform::<i16>::new(44100.0);
 
         let v1: Vec<i16> = wf1.iter().take(100).collect();
-        let mut v2 = Vec::new();
-        let mut wf2_iter = wf2
-            .superpose(Wave {
-                frequency: 3400.0,
-                ..Default::default()
-            })
-            .unwrap()
-            .iter();
-        for _ in 0..100 {
-            v2.push(wf2_iter.next().unwrap());
-        }
+        wf2.superpose(Wave {
+            frequency: 3400.0,
+            ..Default::default()
+        })
+        .unwrap();
+        let v2: Vec<i16> = wf2.iter().take(100).collect();
 
         assert_eq!(v1, v2);
     }
@@ -320,13 +310,13 @@ mod tests {
             44100.0,
             Wave {
                 frequency: 4000.0,
-                amplitude: 1.5,
+                amplitude: 1.5.into(),
                 ..Default::default()
             },
         );
         wf.superpose(Wave {
             frequency: 5000.0,
-            amplitude: 0.5,
+            amplitude: 0.5.into(),
             ..Default::default()
         })
         .unwrap()
@@ -336,7 +326,7 @@ mod tests {
         if let WaveformSource::Generative(components) = wf.source {
             components
                 .iter()
-                .for_each(|c| assert_eq!(c.amplitude, 0.5));
+                .for_each(|c| assert_eq!(c.amplitude, Modulation::Static(0.5)));
         } else {
             panic!("Expected generative waveform");
         }
@@ -362,26 +352,17 @@ mod tests {
             44100.0,
             Wave {
                 frequency: 4000.0,
-                amplitude: 1.0,
+                amplitude: 1.0.into(),
                 ..Default::default()
             },
         );
-        let mut v = Vec::new();
-        let mut iter = wf
-            .superpose(Wave {
-                frequency: 5000.0,
-                amplitude: 0.5,
-                ..Default::default()
-            })
-            .unwrap()
-            .iter();
-        for _ in 0..100 {
-            if let Some(sample) = iter.next() {
-                v.push(sample);
-            } else {
-                break;
-            }
-        }
+        wf.superpose(Wave {
+            frequency: 5000.0,
+            amplitude: 0.5.into(),
+            ..Default::default()
+        })
+        .unwrap();
+        let v: Vec<i16> = wf.iter().take(100).collect();
 
         assert_ne!(v.len(), 100);
     }

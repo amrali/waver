@@ -21,8 +21,10 @@ waver = "0.1"
 ## Example
 
 ```rust
+# extern crate alloc;
 use std::{vec::Vec, f32::consts::PI};
-use waver::{Waveform, Wave, WaveFunc};
+use waver::{Waveform, Wave, WaveFunc, Modulation};
+use alloc::vec;
 
 fn main() {
   // 44.1Khz sampling rate and 16-bit depth.
@@ -30,7 +32,7 @@ fn main() {
 
   // Superpose a sine wave, a cosine wave and a triangle function.
   wf.superpose(Wave { frequency: 2600.0, ..Default::default() }).unwrap();
-  wf.superpose(Wave { frequency: 2600.0, phase: PI / 2.0, ..Default::default() }).unwrap();
+  wf.superpose(Wave { frequency: 2600.0, phase: Modulation::Static(PI / 2.0), ..Default::default() }).unwrap();
   wf.superpose(Wave { frequency: 2600.0, func: WaveFunc::Triangle, ..Default::default() }).unwrap();
   wf.normalize_amplitudes().unwrap();
 
@@ -47,14 +49,14 @@ fn main() {
 * Modulate signal's frequency, amplitude or phase.
 * Numerically stable, prevents clipping.
 * **Signal Analysis**: Perform frequency analysis (FFT) and time-based frequency analysis (STFT) on recorded signals.
-* **Waveform Synthesis**: Create a generative waveform from a recorded one by analyzing its harmonic structure.
+* **Dynamic Waveform Synthesis**: Create a generative waveform from a recorded one by analyzing its harmonic structure, including variations in amplitude and phase over time.
 
 ## TODO
 
 * [ ] Implement checks to protect against aliasing (e.g., disallow frequencies above the Nyquist frequency).
 * [ ] Use fixed-point arithmetic for platforms that doesn't have an FPU.
 * [ ] Replace use of libm crate [when math support moves to libcore].
-* [ ] Improve synthesis to account for phase and amplitude variations over time.
+* [ ] Add support for more advanced windowing functions for STFT.
 
 ## Contributing
 

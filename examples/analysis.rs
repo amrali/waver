@@ -29,7 +29,7 @@ fn main() {
     let spectrum = analysis::spectrum(&waveform, samples.len());
 
     // Find the dominant frequency.
-    let (dominant_freq, _) = spectrum
+    let (dominant_freq, _, _) = spectrum
         .data
         .iter()
         .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())

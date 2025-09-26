@@ -20,11 +20,12 @@
 use crate::{
     error::Error,
     waveform::{Waveform, WaveformSource},
-    Wave,
+    Modulation, Wave,
 };
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::f32::consts::PI;
+use libm::atan2f;
 use num_complex::Complex;
 use num_traits::AsPrimitive;
 use rustfft::FftPlanner;
@@ -34,8 +35,8 @@ use rustfft::FftPlanner;
 pub struct Spectrum {
     /// The frequency resolution of the spectrum.
     pub frequency_resolution: f32,
-    /// The frequency spectrum data.
-    pub data: Vec<(f32, f32)>,
+    /// The frequency spectrum data, as a vector of (frequency, magnitude, phase) tuples.
+    pub data: Vec<(f32, f32, f32)>,
 }
 
 /// Performs a frequency analysis on a `Waveform`.
@@ -71,7 +72,8 @@ pub fn spectrum<BitDepth: Clone + num_traits::Bounded + num_traits::NumCast + As
         .map(|(i, c)| {
             let freq = i as f32 * frequency_resolution;
             let magnitude = (c.re.powi(2) + c.im.powi(2)).sqrt();
-            (freq, magnitude)
+            let phase = atan2f(c.im, c.re);
+            (freq, magnitude, phase)
         })
         .collect();
 
@@ -128,7 +130,8 @@ pub fn time_spectrum<BitDepth: Clone>(
                     .map(|(i, c)| {
                         let freq = i as f32 * frequency_resolution;
                         let magnitude = (c.re.powi(2) + c.im.powi(2)).sqrt();
-                        (freq, magnitude)
+                        let phase = atan2f(c.im, c.re);
+                        (freq, magnitude, phase)
                     })
                     .collect();
 
@@ -167,25 +170,31 @@ pub fn synthesize<BitDepth: Clone>(
     num_harmonics: usize,
 ) -> Result<Waveform<BitDepth>, Error> {
     let spectrogram = time_spectrum(waveform, window_size, hop_size)?;
-    let mut harmonic_map: BTreeMap<i32, (f32, usize)> = BTreeMap::new();
+    let mut harmonic_tracks: BTreeMap<i32, (Vec<f32>, Vec<f32>)> = BTreeMap::new();
 
     for spectrum in spectrogram {
         let mut peaks = spectrum.data.clone();
         peaks.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-        for (freq, mag) in peaks.iter().take(num_harmonics) {
+        for (freq, mag, phase) in peaks.iter().take(num_harmonics) {
             let freq_key = (freq.round() as i32) / 10 * 10;
-            let (total_mag, count) = harmonic_map.entry(freq_key).or_insert((0.0, 0));
-            *total_mag += mag;
-            *count += 1;
+            let (amplitude_envelope, phase_envelope) =
+                harmonic_tracks.entry(freq_key).or_insert((Vec::new(), Vec::new()));
+            amplitude_envelope.push(*mag);
+            phase_envelope.push(*phase);
         }
     }
 
-    let total_magnitude: f32 = harmonic_map.values().map(|(mag, _)| *mag).sum();
-    let waves: Vec<Wave> = harmonic_map
+    let total_magnitude: f32 = harmonic_tracks
+        .values()
+        .map(|(amps, _)| amps.iter().sum::<f32>())
+        .sum();
+
+    let waves: Vec<Wave> = harmonic_tracks
         .into_iter()
-        .map(|(freq, (mag, _))| Wave {
+        .map(|(freq, (amps, phases))| Wave {
             frequency: freq as f32,
-            amplitude: mag / total_magnitude,
+            amplitude: Modulation::Envelope(amps.iter().map(|a| a / total_magnitude).collect()),
+            phase: Modulation::Envelope(phases),
             ..Default::default()
         })
         .collect();
@@ -221,7 +230,7 @@ mod tests {
         let spectrum = spectrum(&waveform, samples.len());
 
         // Find the dominant frequency.
-        let (dominant_freq, _) = spectrum
+        let (dominant_freq, _, _) = spectrum
             .data
             .iter()
             .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
@@ -245,7 +254,7 @@ mod tests {
         let spectrum = spectrum(&waveform, sample_rate as usize);
 
         // Find the dominant frequency.
-        let (dominant_freq, _) = spectrum
+        let (dominant_freq, _, _) = spectrum
             .data
             .iter()
             .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
@@ -276,7 +285,7 @@ mod tests {
 
         // The dominant frequency in each frame should be approximately 440Hz.
         for spectrum in spectrogram {
-            let (dominant_freq, _) = spectrum
+            let (dominant_freq, _, _) = spectrum
                 .data
                 .iter()
                 .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
@@ -304,6 +313,16 @@ mod tests {
         if let WaveformSource::Generative(waves) = synthesized_waveform.source {
             assert_eq!(waves.len(), 1);
             assert!((waves[0].frequency - frequency).abs() < 50.0);
+            if let Modulation::Envelope(amp_env) = &waves[0].amplitude {
+                assert!(amp_env.len() > 1);
+            } else {
+                panic!("Expected amplitude envelope");
+            }
+            if let Modulation::Envelope(phase_env) = &waves[0].phase {
+                assert!(phase_env.len() > 1);
+            } else {
+                panic!("Expected phase envelope");
+            }
         } else {
             panic!("Expected generative waveform");
         }

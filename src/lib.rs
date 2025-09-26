@@ -30,15 +30,17 @@
 //! ## Example
 //!
 //! ```rust
+//! # extern crate alloc;
 //! use std::{vec::Vec, f32::consts::PI};
 //! use waver::{Waveform, Wave, WaveFunc};
+//! use alloc::vec;
 //!
 //! // 44.1Khz sampling rate and 16-bit depth.
 //! let mut wf = waver::Waveform::<i16>::new(44100.0);
 //!
 //! // Superpose a sine wave, a cosine wave and a triangle function.
 //! wf.superpose(Wave { frequency: 2600.0, ..Default::default() }).unwrap();
-//! wf.superpose(Wave { frequency: 2600.0, phase: PI / 2.0, ..Default::default() }).unwrap();
+//! wf.superpose(Wave { frequency: 2600.0, phase: waver::Modulation::Static(PI / 2.0), ..Default::default() }).unwrap();
 //! wf.superpose(Wave { frequency: 2600.0, func: WaveFunc::Triangle, ..Default::default() }).unwrap();
 //! wf.normalize_amplitudes().unwrap();
 //!
@@ -56,7 +58,7 @@ mod wave;
 mod waveform;
 
 pub use self::error::Error;
-pub use wave::{Wave, WaveFunc, WaveIterator};
+pub use wave::{Modulation, Wave, WaveFunc, WaveIterator};
 pub use waveform::{Waveform, WaveformIterator, WaveformSource};
 
 // Test README.md

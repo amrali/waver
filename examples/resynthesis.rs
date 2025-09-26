@@ -30,7 +30,7 @@ fn main() {
 
     // Write the synthesized waveform to a new WAV file.
     let mut writer = WavWriter::create("synthesized.wav", spec).unwrap();
-    for sample in synthesized_waveform.iter().take(44100) {
+    for sample in synthesized_waveform.iter() {
         writer.write_sample(sample).unwrap();
     }
     writer.finalize().unwrap();
