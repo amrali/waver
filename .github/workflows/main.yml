@@ -7,9 +7,9 @@ on:
       - opened
       - synchronize
     paths:
-      - '**.rs'
-      - '**.md'
-      - '.github/workflows/main.yml'
+      - "**.rs"
+      - "**.md"
+      - ".github/workflows/main.yml"
 
   push:
     branches:
