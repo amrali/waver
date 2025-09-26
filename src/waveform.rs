@@ -192,7 +192,9 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     }
 }
 
-impl<'a, BitDepth: Bounded + NumCast + AsPrimitive<f32> + Clone> IntoIterator for &'a Waveform<BitDepth> {
+impl<'a, BitDepth: Bounded + NumCast + AsPrimitive<f32> + Clone> IntoIterator
+    for &'a Waveform<BitDepth>
+{
     type Item = BitDepth;
     type IntoIter = WaveformIterator<'a, BitDepth>;
 
@@ -228,10 +230,7 @@ impl<'a, BitDepth: Bounded + NumCast + AsPrimitive<f32> + Clone> Iterator
                     return Some(NumCast::from(0.0).unwrap());
                 }
                 // Superpose all waveform components.
-                let superposition: f32 = iters
-                    .iter_mut()
-                    .map(|x| x.next().unwrap_or(0.0))
-                    .sum();
+                let superposition: f32 = iters.iter_mut().map(|x| x.next().unwrap_or(0.0)).sum();
                 NumCast::from(superposition * BitDepth::max_value().as_())
             }
             WaveformIteratorSource::Recorded(iter) => {

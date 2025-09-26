@@ -59,12 +59,12 @@ pub fn spectrum<BitDepth: Clone + num_traits::Bounded + num_traits::NumCast + As
     let mut buffer: Vec<Complex<f32>> = waveform
         .iter()
         .take(num_samples)
-        .map(|x| Complex::new(x.as_() as f32, 0.0))
+        .map(|x| Complex::new(x.as_(), 0.0))
         .collect();
 
     fft.process(&mut buffer);
 
-    let frequency_resolution = waveform.sample_rate as f32 / num_samples as f32;
+    let frequency_resolution = waveform.sample_rate / num_samples as f32;
     let data = buffer
         .iter()
         .take(num_samples / 2)
@@ -122,7 +122,7 @@ pub fn time_spectrum<BitDepth: Clone>(
 
                 fft.process(&mut buffer);
 
-                let frequency_resolution = waveform.sample_rate as f32 / window_size as f32;
+                let frequency_resolution = waveform.sample_rate / window_size as f32;
                 let data = buffer
                     .iter()
                     .take(window_size / 2)
@@ -177,8 +177,9 @@ pub fn synthesize<BitDepth: Clone>(
         peaks.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
         for (freq, mag, phase) in peaks.iter().take(num_harmonics) {
             let freq_key = (freq.round() as i32) / 10 * 10;
-            let (amplitude_envelope, phase_envelope) =
-                harmonic_tracks.entry(freq_key).or_insert((Vec::new(), Vec::new()));
+            let (amplitude_envelope, phase_envelope) = harmonic_tracks
+                .entry(freq_key)
+                .or_insert((Vec::new(), Vec::new()));
             amplitude_envelope.push(*mag);
             phase_envelope.push(*phase);
         }

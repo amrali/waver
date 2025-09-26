@@ -23,7 +23,8 @@ fn main() {
     let samples: Vec<i16> = reader.samples().map(|s| s.unwrap()).collect();
 
     // Create a waveform from the recorded samples.
-    let waveform: Waveform<i16> = Waveform::from_recorded_samples(spec.sample_rate as f32, &samples);
+    let waveform: Waveform<i16> =
+        Waveform::from_recorded_samples(spec.sample_rate as f32, &samples);
 
     // Synthesize a new waveform.
     let synthesized_waveform = analysis::synthesize(&waveform, 1024, 256, 2).unwrap();

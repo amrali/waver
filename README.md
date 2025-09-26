@@ -1,5 +1,4 @@
-Waver [![CI](https://github.com/amrali/waver/actions/workflows/main.yml/badge.svg)](https://github.com/amrali/waver/actions/workflows/main.yml) [![codecov](https://codecov.io/gh/amrali/waver/branch/master/graph/badge.svg?token=fN3pEuLaAB)](https://codecov.io/gh/amrali/waver) [![Crates.io](https://img.shields.io/crates/v/waver.svg?logo=rust)](https://crates.io/crates/waver) [![Documentation](https://img.shields.io/badge/docs-current-blue.svg?logo=rust)](https://docs.rs/waver)
-=====
+# Waver [![CI](https://github.com/amrali/waver/actions/workflows/main.yml/badge.svg)](https://github.com/amrali/waver/actions/workflows/main.yml) [![codecov](https://codecov.io/gh/amrali/waver/branch/master/graph/badge.svg?token=fN3pEuLaAB)](https://codecov.io/gh/amrali/waver) [![Crates.io](https://img.shields.io/crates/v/waver.svg?logo=rust)](https://crates.io/crates/waver) [![Documentation](https://img.shields.io/badge/docs-current-blue.svg?logo=rust)](https://docs.rs/waver)
 
 Waver is a simple no-std library to generate any waveform of a given frequency,
 amplitude and phase.
@@ -43,20 +42,20 @@ fn main() {
 
 ## Features
 
-* Arbitrary quantization levels. Specify the bit depth when constructing `Waveform`.
-* Online wave generation. No buffers, infinite iterators.
-* Wave superposition with weighted amplitudes.
-* Modulate signal's frequency, amplitude or phase.
-* Numerically stable, prevents clipping.
-* **Signal Analysis**: Perform frequency analysis (FFT) and time-based frequency analysis (STFT) on recorded signals.
-* **Dynamic Waveform Synthesis**: Create a generative waveform from a recorded one by analyzing its harmonic structure, including variations in amplitude and phase over time.
+- Arbitrary quantization levels. Specify the bit depth when constructing `Waveform`.
+- Online wave generation. No buffers, infinite iterators.
+- Wave superposition with weighted amplitudes.
+- Modulate signal's frequency, amplitude or phase.
+- Numerically stable, prevents clipping.
+- **Signal Analysis**: Perform frequency analysis (FFT) and time-based frequency analysis (STFT) on recorded signals.
+- **Dynamic Waveform Synthesis**: Create a generative waveform from a recorded one by analyzing its harmonic structure, including variations in amplitude and phase over time.
 
 ## TODO
 
-* [ ] Implement checks to protect against aliasing (e.g., disallow frequencies above the Nyquist frequency).
-* [ ] Use fixed-point arithmetic for platforms that doesn't have an FPU.
-* [ ] Replace use of libm crate [when math support moves to libcore].
-* [ ] Add support for more advanced windowing functions for STFT.
+- [ ] Implement checks to protect against aliasing (e.g., disallow frequencies above the Nyquist frequency).
+- [ ] Use fixed-point arithmetic for platforms that doesn't have an FPU.
+- [ ] Replace use of libm crate [when math support moves to libcore].
+- [ ] Add support for more advanced windowing functions for STFT.
 
 ## Contributing
 
