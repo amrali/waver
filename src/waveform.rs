@@ -213,6 +213,9 @@ pub enum WaveformIteratorSource<'a> {
 }
 
 /// Iterator for Waveform structure.
+///
+/// For generative waveforms, if any underlying iterator ends early (e.g., due to numerical instability),
+/// the iterator will yield zero for that component in subsequent iterations.
 pub struct WaveformIterator<'a, BitDepth: Clone> {
     _inner: &'a Waveform<BitDepth>,
     source: WaveformIteratorSource<'a>,
@@ -226,9 +229,6 @@ impl<'a, BitDepth: Bounded + NumCast + AsPrimitive<f32> + Clone> Iterator
     fn next(&mut self) -> Option<Self::Item> {
         match &mut self.source {
             WaveformIteratorSource::Generative(iters) => {
-                if iters.is_empty() {
-                    return Some(NumCast::from(0.0).unwrap());
-                }
                 // Superpose all waveform components.
                 let superposition: f32 = iters.iter_mut().map(|x| x.next().unwrap_or(0.0)).sum();
                 NumCast::from(superposition * BitDepth::max_value().as_())
@@ -244,7 +244,6 @@ impl<'a, BitDepth: Bounded + NumCast + AsPrimitive<f32> + Clone> Iterator
 mod tests {
     use super::*;
     use crate::{Modulation, Wave};
-    use core::i16;
 
     #[test]
     fn test_waveform_single_wave_match() {

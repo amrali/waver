@@ -376,7 +376,7 @@ mod tests {
             phase: Modulation::Static(PI / 2.0),
             ..Default::default()
         };
-        let fmt_string = format!("{}", wave);
+        let fmt_string = format!("{wave}");
         assert_eq!(
             fmt_string,
             "<Func: Sine, Freq: 120Hz, Ampl: 1, Sampling Freq: 500Hz>"
