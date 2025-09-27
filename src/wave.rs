@@ -117,7 +117,7 @@ impl Wave {
     /// let wave = Wave { sample_rate: 10000.0, frequency: 2000.0, ..Default::default() };
     /// let res: Vec<f32> = wave.iter().take(10).collect();
     /// ```
-    pub fn iter(&self) -> WaveIterator {
+    pub fn iter(&self) -> WaveIterator<'_> {
         self.into_iter()
     }
 }

@@ -176,7 +176,7 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     ///     res.push(iter.next().unwrap());
     /// }
     /// ```
-    pub fn iter(&self) -> WaveformIterator<BitDepth> {
+    pub fn iter(&self) -> WaveformIterator<'_, BitDepth> {
         let iter_source = match &self.source {
             WaveformSource::Generative(components) => {
                 let iters = components.iter().map(|c| c.iter()).collect();
