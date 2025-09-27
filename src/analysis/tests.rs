@@ -505,9 +505,7 @@ fn test_extreme_high_frequencies() {
                 } else {
                     test_freq / 1_000_000.0
                 };
-                panic!(
-                    "Synthesis failed for {freq_display:.1}{freq_unit}: {e:?}"
-                );
+                panic!("Synthesis failed for {freq_display:.1}{freq_unit}: {e:?}");
             }
         }
     }
