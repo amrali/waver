@@ -14,8 +14,11 @@
 
 //! Short-Time Fourier Transform (STFT) implementation.
 
-use crate::{error::Error, waveform::{Waveform, WaveformSource}};
 use super::spectrum::Spectrum;
+use crate::{
+    error::Error,
+    waveform::{Waveform, WaveformSource},
+};
 use alloc::vec::Vec;
 use core::f32::consts::PI;
 use libm::atan2f;
