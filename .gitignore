@@ -15,3 +15,6 @@ Cargo.lock
 # Ignore code coverage
 lcov.info
 tarpaulin*
+
+# Ignore .trunk directory
+.trunk/
