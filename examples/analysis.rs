@@ -36,7 +36,7 @@ fn main() {
         .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
         .unwrap();
 
-    println!("Dominant frequency: {} Hz", dominant_freq);
+    println!("Dominant frequency: {dominant_freq} Hz");
 
     // Clean up the generated file.
     std::fs::remove_file("sine_440hz.wav").unwrap();

@@ -31,14 +31,13 @@ fn main() {
 
     // Write the synthesized waveform to a new WAV file.
     let mut writer = WavWriter::create("synthesized.wav", spec).unwrap();
-    for sample in synthesized_waveform.iter() {
-        writer.write_sample(sample).unwrap();
-    }
+    synthesized_waveform
+        .iter()
+        .take(samples.len())
+        .for_each(|sample| {
+            writer.write_sample(sample).unwrap();
+        });
     writer.finalize().unwrap();
 
     println!("Synthesized waveform saved to synthesized.wav");
-
-    // Clean up the generated files.
-    std::fs::remove_file("original.wav").unwrap();
-    std::fs::remove_file("synthesized.wav").unwrap();
 }
