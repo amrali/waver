@@ -245,13 +245,11 @@ fn test_synthesis_quality() {
 
     assert!(
         orig_target_magnitude > 0.0 && synth_target_magnitude > 0.0,
-        "Both original and synthesized should have energy at target frequency {:.1}Hz",
-        frequency
+        "Both original and synthesized should have energy at target frequency {frequency:.1}Hz"
     );
 
     println!(
-        "✅ Synthesis quality test passed - frequency {:.1}Hz preserved in synthesis",
-        frequency
+        "✅ Synthesis quality test passed - frequency {frequency:.1}Hz preserved in synthesis"
     );
 }
 
@@ -273,7 +271,7 @@ fn test_frequency_range_coverage() {
         let synthesized = synthesize(&waveform, 1024, 512, 5).unwrap();
 
         if let WaveformSource::Generative(waves) = &synthesized.source {
-            assert!(!waves.is_empty(), "No waves detected for {}Hz", test_freq);
+            assert!(!waves.is_empty(), "No waves detected for {test_freq}Hz");
 
             let closest_freq = waves
                 .iter()
@@ -297,11 +295,7 @@ fn test_frequency_range_coverage() {
             let actual_error = (closest_freq - test_freq).abs() / test_freq * 100.0;
             assert!(
                 actual_error < max_error_percent,
-                "{} {}Hz synthesis failed: {:.2}% error (expected < {:.1}%)",
-                description,
-                test_freq,
-                actual_error,
-                max_error_percent
+                "{description} {test_freq}Hz synthesis failed: {actual_error:.2}% error (expected < {max_error_percent:.1}%)"
             );
         }
     }
@@ -334,7 +328,7 @@ fn test_extreme_low_frequencies() {
         match synthesize(&waveform, window_size, hop_size, 5) {
             Ok(synthesized) => {
                 if let WaveformSource::Generative(waves) = &synthesized.source {
-                    assert!(!waves.is_empty(), "No waves detected for {}Hz", test_freq);
+                    assert!(!waves.is_empty(), "No waves detected for {test_freq}Hz");
 
                     // Find the closest frequency to our target
                     let closest_wave = waves
@@ -362,7 +356,7 @@ fn test_extreme_low_frequencies() {
                     );
                 }
             }
-            Err(e) => panic!("Synthesis failed for {}Hz: {:?}", test_freq, e),
+            Err(e) => panic!("Synthesis failed for {test_freq}Hz: {e:?}"),
         }
     }
 }
@@ -427,8 +421,7 @@ fn test_extreme_high_frequencies() {
                             test_freq / 1_000_000.0
                         };
                         println!(
-                            "⚠️  No waves detected for {:.1}{} - detection limit reached",
-                            freq_display, freq_unit
+                            "⚠️  No waves detected for {freq_display:.1}{freq_unit} - detection limit reached"
                         );
                         continue;
                     }
@@ -513,8 +506,7 @@ fn test_extreme_high_frequencies() {
                     test_freq / 1_000_000.0
                 };
                 panic!(
-                    "Synthesis failed for {:.1}{}: {:?}",
-                    freq_display, freq_unit, e
+                    "Synthesis failed for {freq_display:.1}{freq_unit}: {e:?}"
                 );
             }
         }
