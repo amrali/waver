@@ -22,6 +22,11 @@ rustfft = { version = "6.4", default-features = false }
 doc-comment = "0.3"
 hound = "3.5"
 
+[features]
+# Optional diagnostic tests that are expensive and produce verbose output
+# Usage: cargo test --features diagnostics
+diagnostics = []
+
 [profile.release]
 lto = true
 panic = 'abort'
