@@ -14,20 +14,19 @@
 
 //! Basic FFT spectrum analysis functionality.
 
-use crate::waveform::Waveform;
+use crate::Waveform;
 use alloc::vec::Vec;
-use libm::atan2f;
+use core::iter::Sum;
 use num_complex::Complex;
-use num_traits::AsPrimitive;
 use rustfft::FftPlanner;
 
 /// A structure that represents the frequency spectrum of a signal.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Spectrum {
+pub struct Spectrum<F> {
     /// The frequency resolution of the spectrum.
-    pub frequency_resolution: f32,
+    pub frequency_resolution: F,
     /// The frequency spectrum data, as a vector of (frequency, magnitude, phase) tuples.
-    pub data: Vec<(f32, f32, f32)>,
+    pub data: Vec<(F, F, F)>,
 }
 
 /// Performs a frequency analysis on a `Waveform`.
@@ -40,30 +39,32 @@ pub struct Spectrum {
 /// # Returns
 ///
 /// The frequency spectrum of the waveform.
-pub fn spectrum<BitDepth: Clone + num_traits::Bounded + num_traits::NumCast + AsPrimitive<f32>>(
-    waveform: &Waveform<BitDepth>,
-    num_samples: usize,
-) -> Spectrum {
-    let mut planner = FftPlanner::<f32>::new();
+pub fn spectrum<BitDepth>(waveform: &Waveform<BitDepth>, num_samples: usize) -> Spectrum<BitDepth>
+where
+    BitDepth: Clone + rustfft::FftNum + num_traits::Float + Sum,
+{
+    let mut planner = FftPlanner::<BitDepth>::new();
     let fft = planner.plan_fft_forward(num_samples);
 
-    let mut buffer: Vec<Complex<f32>> = waveform
+    let mut buffer: Vec<Complex<BitDepth>> = waveform
         .iter()
         .take(num_samples)
-        .map(|sample| Complex::new(sample.as_(), 0.0))
+        .map(|sample| Complex::new(sample, BitDepth::zero()))
         .collect();
 
     fft.process(&mut buffer);
 
-    let frequency_resolution = waveform.sample_rate / num_samples as f32;
+    let frequency_resolution =
+        BitDepth::from(waveform.sample_rate).unwrap() / BitDepth::from(num_samples).unwrap();
     let data = buffer
         .iter()
         .take(num_samples / 2)
         .enumerate()
         .map(|(bin_index, complex_value)| {
-            let frequency = bin_index as f32 * frequency_resolution;
-            let magnitude = (complex_value.re.powi(2) + complex_value.im.powi(2)).sqrt();
-            let phase = atan2f(complex_value.im, complex_value.re);
+            let frequency = BitDepth::from(bin_index).unwrap() * frequency_resolution;
+            let magnitude =
+                (complex_value.re * complex_value.re + complex_value.im * complex_value.im).sqrt();
+            let phase = complex_value.im.atan2(complex_value.re);
             (frequency, magnitude, phase)
         })
         .collect();

@@ -12,227 +12,382 @@
 //   See the License for the specific language governing permissions and
 //   limitations under the License.
 
-//! Utility functions for signal analysis.
+//! Signal analysis utilities for spectral processing and frequency tracking.
 
 use super::spectrum::Spectrum;
-use crate::{Modulation, Wave};
+use crate::Wave;
 use alloc::vec::Vec;
-use core::f32::consts::PI;
 
-/// Advanced spectral peak with sub-bin frequency accuracy
+/// A spectral peak with sub-bin frequency accuracy using parabolic interpolation.
 #[derive(Debug, Clone)]
-pub struct SpectralPeak {
-    pub frequency: f32,
-    pub magnitude: f32,
-    pub phase: f32,
+pub struct SpectralPeak<F> {
+    pub frequency: F,
+    pub magnitude: F,
+    pub phase: F,
 }
 
-/// A frequency track that follows a spectral component across time
+/// Tracks a frequency component across multiple time frames for synthesis.
 #[derive(Debug, Clone)]
-pub struct FrequencyTrack {
-    frames: Vec<Option<FrameData>>,
-    confidence: f32,
-    last_frequency: f32,
+pub struct FrequencyTrack<F> {
+    frames: Vec<Option<FrameData<F>>>,
+    confidence: F,
+    last_frequency: F,
 }
 
 #[derive(Debug, Clone)]
-struct FrameData {
-    frequency: f32,
-    magnitude: f32,
-    phase: f32,
+struct FrameData<F> {
+    frequency: F,
+    magnitude: F,
+    phase: F,
 }
 
-/// Advanced peak detection with parabolic interpolation for sub-bin accuracy
-pub fn find_spectral_peaks_advanced(
-    spectrum: &Spectrum,
+/// Finds spectral peaks using adaptive thresholding and parabolic interpolation.
+///
+/// Uses a two-tier threshold system:
+/// - Base threshold: 1% of maximum magnitude
+/// - Noise floor: 3x mean magnitude
+///
+/// Applies parabolic interpolation for sub-bin frequency accuracy and removes
+/// peaks closer than 1.5 bins to avoid spectral leakage artifacts.
+pub fn find_spectral_peaks<F>(
+    spectrum: &Spectrum<F>,
     max_peaks: usize,
-    frequency_resolution: f32,
-) -> Vec<SpectralPeak> {
-    let spectrum_data = &spectrum.data;
-
-    if spectrum_data.len() < 3 {
+    freq_resolution: F,
+) -> Vec<SpectralPeak<F>>
+where
+    F: num_traits::Float + Copy + PartialOrd + core::fmt::Debug,
+{
+    if spectrum.data.len() < 3 {
         return Vec::new();
     }
 
-    // Calculate dynamic magnitude threshold based on spectrum statistics
-    let magnitudes: Vec<f32> = spectrum_data
-        .iter()
-        .map(|(_, magnitude, _)| *magnitude)
-        .collect();
-    let max_magnitude = magnitudes.iter().fold(0.0f32, |acc, &val| acc.max(val));
-    let mean_magnitude = magnitudes.iter().sum::<f32>() / magnitudes.len() as f32;
+    // Calculate adaptive threshold based on spectrum statistics
+    let magnitudes: Vec<F> = spectrum.data.iter().map(|(_, mag, _)| *mag).collect();
+    let max_magnitude = magnitudes.iter().fold(F::zero(), |acc, &val| acc.max(val));
+    let mean_magnitude = magnitudes.iter().fold(F::zero(), |acc, &val| acc + val)
+        / F::from(magnitudes.len()).unwrap();
 
-    // Adaptive threshold: use a fraction of max or above mean, whichever is lower
-    let magnitude_threshold = (max_magnitude * 0.01).min(mean_magnitude * 2.0).max(0.0001);
+    let threshold =
+        (max_magnitude * F::from(0.01).unwrap()).max(mean_magnitude * F::from(3.0).unwrap());
 
-    // Find local maxima with magnitude threshold
-    let mut peaks: Vec<SpectralPeak> = spectrum_data
+    // Find local maxima using 3-point windows
+    let mut peaks: Vec<SpectralPeak<F>> = spectrum
+        .data
         .windows(3)
         .filter_map(|window| {
-            let (frequency, magnitude, phase) = window[1]; // Center element
+            let (_, magnitude, phase) = window[1];
 
-            // Check if it's a local maximum above threshold
-            if magnitude > magnitude_threshold && magnitude > window[0].1 && magnitude > window[2].1
-            {
-                // Parabolic interpolation for sub-bin frequency accuracy
-                let (y_prev, y_curr, y_next) = (window[0].1, magnitude, window[2].1);
-
-                // Avoid division by zero
-                let parabola_a = (y_prev - 2.0 * y_curr + y_next) / 2.0;
-                let parabola_b = (y_next - y_prev) / 2.0;
-
-                let bin_offset = if parabola_a.abs() > 1e-10 {
-                    -parabola_b / (2.0 * parabola_a)
-                } else {
-                    0.0
-                };
-                let bin_offset = bin_offset.clamp(-0.5, 0.5); // Limit offset to reasonable range
-
-                let interpolated_frequency = frequency + bin_offset * frequency_resolution;
-                let interpolated_magnitude = y_curr - (parabola_b * bin_offset / 2.0);
-
-                Some(SpectralPeak {
-                    frequency: interpolated_frequency.max(0.0),
-                    magnitude: interpolated_magnitude.max(0.0),
-                    phase,
-                })
-            } else {
-                None
+            // Must exceed threshold
+            if magnitude <= threshold {
+                return None;
             }
+
+            // Must be local maximum
+            if magnitude <= window[0].1 || magnitude <= window[2].1 {
+                return None;
+            }
+
+            // For weaker peaks, require clearer dominance to reduce false positives
+            let is_strong_peak = magnitude > mean_magnitude * F::from(20.0).unwrap();
+            if !is_strong_peak {
+                let margin = F::from(1.1).unwrap(); // 10% margin
+                if magnitude < window[0].1 * margin || magnitude < window[2].1 * margin {
+                    return None;
+                }
+            }
+
+            let interpolated_freq = interpolate_peak_frequency(window, freq_resolution);
+
+            // Reject DC and very low frequencies that are likely DC offset
+            if interpolated_freq < F::from(0.1).unwrap() {
+                return None;
+            }
+
+            Some(SpectralPeak {
+                frequency: interpolated_freq.max(F::zero()),
+                magnitude,
+                phase,
+            })
         })
         .collect();
 
-    // Sort by magnitude (strongest first) and take only the requested number
+    // Sort by magnitude (strongest first)
     peaks.sort_by(|a, b| {
         b.magnitude
             .partial_cmp(&a.magnitude)
             .unwrap_or(core::cmp::Ordering::Equal)
     });
-    peaks.truncate(max_peaks);
-    peaks
+
+    remove_close_peaks(peaks, freq_resolution, max_peaks)
 }
 
-/// Check if a peak can be matched to an existing track
-pub fn can_match_to_track(
-    track: &FrequencyTrack,
-    peak: &SpectralPeak,
-    _frame_index: usize,
-    frequency_resolution: f32,
-) -> bool {
-    let expected_frequency = track.last_frequency;
-    let base_tolerance = calculate_frequency_tolerance(expected_frequency, frequency_resolution);
+/// Applies parabolic interpolation to estimate peak frequency with sub-bin accuracy.
+///
+/// Uses a 3-point parabolic fit around the peak to estimate the true frequency
+/// between FFT bins, improving frequency resolution beyond the bin spacing.
+fn interpolate_peak_frequency<F>(window: &[(F, F, F)], freq_resolution: F) -> F
+where
+    F: num_traits::Float + Copy,
+{
+    let (frequency, magnitude, _) = window[1];
+    let (y_prev, y_curr, y_next) = (window[0].1, magnitude, window[2].1);
+    let two = F::from(2.0).unwrap();
 
-    // Allow larger tolerance for very low frequencies and high frequencies
-    let adaptive_tolerance = match expected_frequency {
-        freq if freq < 1.0 => base_tolerance * 10.0, // Very lenient for sub-Hz
-        freq if freq > 10000.0 => base_tolerance * 2.0, // More lenient for high frequencies
-        _ => base_tolerance,
+    // Parabolic interpolation coefficients
+    let parabola_a = (y_prev - two * y_curr + y_next) / two;
+    let parabola_b = (y_next - y_prev) / two;
+
+    // Calculate bin offset (-0.5 to +0.5 bins)
+    let bin_offset = if parabola_a.abs() > F::from(1e-10).unwrap() && parabola_a < F::zero() {
+        (-parabola_b / (two * parabola_a)).clamp(F::from(-0.5).unwrap(), F::from(0.5).unwrap())
+    } else {
+        F::zero()
     };
 
-    (peak.frequency - expected_frequency).abs() < adaptive_tolerance
+    frequency + bin_offset * freq_resolution
 }
 
-/// Calculate frequency tolerance for track matching
-pub fn calculate_frequency_tolerance(frequency: f32, freq_resolution: f32) -> f32 {
-    if frequency < 1.0 {
+/// Removes peaks that are too close together to avoid spectral leakage artifacts.
+///
+/// Maintains minimum separation of 1.5 bins between peaks, keeping the strongest
+/// peak when multiple peaks are within the separation threshold.
+fn remove_close_peaks<F>(
+    peaks: Vec<SpectralPeak<F>>,
+    freq_resolution: F,
+    max_peaks: usize,
+) -> Vec<SpectralPeak<F>>
+where
+    F: num_traits::Float + Copy,
+{
+    let mut filtered = Vec::new();
+    let min_separation = freq_resolution * F::from(1.5).unwrap(); // 1.5 bins minimum
+
+    for peak in peaks {
+        let too_close = filtered.iter().any(|existing: &SpectralPeak<F>| {
+            (peak.frequency - existing.frequency).abs() < min_separation
+        });
+
+        if !too_close {
+            filtered.push(peak);
+        }
+
+        if filtered.len() >= max_peaks {
+            break;
+        }
+    }
+
+    filtered
+}
+
+/// Determines if a spectral peak can be matched to an existing frequency track.
+///
+/// Uses adaptive tolerance based on frequency range:
+/// - Sub-Hz frequencies: 10x base tolerance (very lenient)
+/// - High frequencies (>10kHz): 2x base tolerance
+/// - Mid frequencies: base tolerance
+pub fn can_match_to_track<F>(
+    track: &FrequencyTrack<F>,
+    peak: &SpectralPeak<F>,
+    _frame_index: usize,
+    freq_resolution: F,
+) -> bool
+where
+    F: num_traits::Float + Copy + PartialOrd + num_traits::FromPrimitive,
+{
+    let tolerance = calculate_frequency_tolerance(track.last_frequency, freq_resolution);
+    let adaptive_tolerance = if track.last_frequency < F::one() {
+        tolerance * F::from(10.0).unwrap() // Very lenient for sub-Hz
+    } else if track.last_frequency > F::from(10000.0).unwrap() {
+        tolerance * F::from(2.0).unwrap() // More lenient for high frequencies
+    } else {
+        tolerance
+    };
+
+    (peak.frequency - track.last_frequency).abs() < adaptive_tolerance
+}
+
+/// Calculates frequency tolerance for track matching based on frequency range.
+///
+/// Uses different strategies for different frequency ranges:
+/// - Sub-Hz: Absolute tolerance (0.5Hz minimum)
+/// - Low frequencies (<100Hz): 5% relative tolerance
+/// - Higher frequencies: 2% relative tolerance (minimum 2x freq resolution)
+pub fn calculate_frequency_tolerance<F>(frequency: F, freq_resolution: F) -> F
+where
+    F: num_traits::Float + Copy + PartialOrd,
+{
+    if frequency < F::one() {
         // For very low frequencies, use absolute tolerance
-        0.5f32.max(freq_resolution)
-    } else if frequency < 100.0 {
+        F::from(0.5).unwrap().max(freq_resolution)
+    } else if frequency < F::from(100.0).unwrap() {
         // For low frequencies, use 5% tolerance
-        frequency * 0.05
+        frequency * F::from(0.05).unwrap()
     } else {
         // For higher frequencies, use smaller percentage but not less than freq resolution
-        (frequency * 0.02).max(freq_resolution * 2.0)
+        (frequency * F::from(0.02).unwrap()).max(freq_resolution * F::from(2.0).unwrap())
     }
 }
 
-/// Universal amplitude scaling that works for all frequency ranges
-pub fn calculate_universal_amplitude_scaling(
-    amplitudes: &[f32],
+/// Calculates amplitude scaling for synthesis that works across all frequency ranges.
+///
+/// Applies frequency-dependent scaling to compensate for:
+/// - Window function energy loss (base scaling)
+/// - Frequency-dependent detection sensitivity
+/// - Magnitude-dependent normalization
+/// - Anti-aliasing near Nyquist frequency
+///
+/// The scaling is conservative to minimize spurious harmonics while preserving
+/// energy in the fundamental frequency.
+pub fn calculate_amplitude_scaling<F>(
+    amplitudes: &[F],
     window_size: usize,
-    _sample_rate: f32,
-    frequency: f32,
-) -> f32 {
+    sample_rate: F,
+    frequency: F,
+) -> F
+where
+    F: num_traits::Float + Copy + PartialOrd + num_traits::FromPrimitive,
+{
     if amplitudes.is_empty() {
-        return 1.0;
+        return F::one();
     }
 
-    let max_amplitude = amplitudes.iter().fold(0.0f32, |acc, &val| acc.max(val));
-    if max_amplitude <= 0.0 {
-        return 1.0;
+    let max_amplitude = amplitudes.iter().fold(F::zero(), |acc, &val| acc.max(val));
+    if max_amplitude <= F::zero() {
+        return F::one();
     }
 
-    // Base scaling factor
-    let base_scale = 2.0 / window_size as f32;
+    // Base scaling compensates for window function energy loss
+    let base_scale = F::from(2.0).unwrap() / F::from(window_size).unwrap();
 
-    // Frequency-dependent scaling using pattern matching for clarity
-    let frequency_scale = match frequency {
-        freq if freq < 1.0 => 100.0, // Very low frequencies need more amplification
-        freq if freq < 10.0 => 50.0, // Low frequencies
-        freq if freq < 1000.0 => 20.0, // Audio frequencies
-        freq if freq < 10000.0 => 10.0, // High audio frequencies
-        _ => 5.0,                    // Very high frequencies
+    // Frequency-dependent scaling - higher for low frequencies that are harder to detect
+    let frequency_scale = if frequency < F::from(0.1).unwrap() {
+        F::from(20.0).unwrap() // Very low frequencies need significant boost
+    } else if frequency < F::from(10.0).unwrap() {
+        F::from(12.0).unwrap() // Low frequencies need moderate boost
+    } else if frequency < F::from(1000.0).unwrap() {
+        F::from(5.0).unwrap() // Audio frequencies
+    } else if frequency < F::from(10000.0).unwrap() {
+        F::from(3.0).unwrap() // High audio frequencies
+    } else {
+        F::from(2.0).unwrap() // Very high frequencies
     };
 
-    // Magnitude-dependent scaling using pattern matching
-    let magnitude_scale = match max_amplitude {
-        mag if mag > 100000.0 => 0.0001,
-        mag if mag > 10000.0 => 0.001,
-        mag if mag > 1000.0 => 0.01,
-        _ => 0.1,
+    // Magnitude-dependent scaling to normalize different signal strengths
+    let magnitude_scale = if max_amplitude > F::from(100000.0).unwrap() {
+        F::from(0.001).unwrap() // Very strong signals need reduction
+    } else if max_amplitude > F::from(10000.0).unwrap() {
+        F::from(0.01).unwrap()
+    } else if max_amplitude > F::from(1000.0).unwrap() {
+        F::from(0.1).unwrap()
+    } else {
+        F::from(0.5).unwrap() // Conservative scaling for normal signals
     };
 
-    base_scale * frequency_scale * magnitude_scale
+    // Anti-aliasing factor reduces amplitude near Nyquist frequency
+    let nyquist_freq = sample_rate / F::from(2.0).unwrap();
+    let anti_alias_factor = if frequency > nyquist_freq * F::from(0.8).unwrap() {
+        F::from(0.1).unwrap() // Strongly attenuate near Nyquist
+    } else {
+        F::one()
+    };
+
+    base_scale * frequency_scale * magnitude_scale * anti_alias_factor
 }
 
-/// Unwrap phase to ensure continuity
-pub fn unwrap_phase(phases: &[f32]) -> Vec<f32> {
+/// Unwraps phase values to ensure continuity across time frames.
+///
+/// Detects phase jumps greater than 1.5π and adds/subtracts 2π to maintain
+/// continuity. This is essential for proper phase tracking in synthesis.
+/// After unwrapping, applies light smoothing to reduce phase noise.
+pub fn unwrap_phase<F>(phases: &[F]) -> Vec<F>
+where
+    F: num_traits::Float + Copy + PartialOrd + num_traits::FromPrimitive,
+{
     if phases.is_empty() {
         return Vec::new();
+    }
+
+    if phases.len() == 1 {
+        return Vec::from([phases[0]]);
     }
 
     let mut unwrapped = Vec::with_capacity(phases.len());
     unwrapped.push(phases[0]);
 
-    let mut cumulative_offset = 0.0f32;
+    let mut cumulative_offset = F::zero();
+    let pi = F::from(core::f64::consts::PI).unwrap();
+    let two_pi = F::from(2.0).unwrap() * pi;
+    let threshold = pi + pi / F::from(2.0).unwrap(); // 1.5π threshold
 
+    // Unwrap phase jumps
     for i in 1..phases.len() {
         let mut phase = phases[i] + cumulative_offset;
         let diff = phase - unwrapped[i - 1];
 
-        // Unwrap phase jumps greater than π
-        if diff > PI {
-            cumulative_offset -= 2.0 * PI;
-            phase -= 2.0 * PI;
-        } else if diff < -PI {
-            cumulative_offset += 2.0 * PI;
-            phase += 2.0 * PI;
+        if diff > threshold {
+            cumulative_offset = cumulative_offset - two_pi;
+            phase = phase - two_pi;
+        } else if diff < -threshold {
+            cumulative_offset = cumulative_offset + two_pi;
+            phase = phase + two_pi;
         }
 
         unwrapped.push(phase);
     }
 
-    unwrapped
+    smooth_phase(&unwrapped)
 }
 
-impl FrequencyTrack {
-    pub const fn new(initial_frequency: f32) -> Self {
+/// Applies light smoothing to phase values to reduce noise.
+///
+/// Uses a simple 3-point averaging filter, preserving endpoints.
+/// This reduces phase noise while maintaining the overall phase trajectory.
+fn smooth_phase<F>(phases: &[F]) -> Vec<F>
+where
+    F: num_traits::Float + Copy,
+{
+    if phases.len() < 3 {
+        return phases.to_vec();
+    }
+
+    let mut smoothed = Vec::with_capacity(phases.len());
+    smoothed.push(phases[0]); // Keep first value unchanged
+
+    // Apply 3-point smoothing to interior points
+    for i in 1..phases.len() - 1 {
+        let smoothed_phase = (phases[i - 1] + F::from(2.0).unwrap() * phases[i] + phases[i + 1])
+            / F::from(4.0).unwrap();
+        smoothed.push(smoothed_phase);
+    }
+
+    smoothed.push(phases[phases.len() - 1]); // Keep last value unchanged
+    smoothed
+}
+
+impl<F> FrequencyTrack<F>
+where
+    F: num_traits::Float + Copy + PartialOrd + num_traits::FromPrimitive + Default,
+{
+    /// Creates a new frequency track starting with the given frequency.
+    pub fn new(initial_frequency: F) -> Self {
         Self {
             frames: Vec::new(),
-            confidence: 1.0,
+            confidence: F::one(),
             last_frequency: initial_frequency,
         }
     }
 
-    pub fn add_frame(&mut self, frame_index: usize, frequency: f32, magnitude: f32, phase: f32) {
-        // Extend frames vector if necessary
+    /// Adds a frame of data to this track, updating confidence based on frequency stability.
+    pub fn add_frame(&mut self, frame_index: usize, frequency: F, magnitude: F, phase: F) {
         self.frames.resize(frame_index + 1, None);
 
         // Update confidence based on frequency stability
         if !self.frames.is_empty() {
             let frequency_deviation = (frequency - self.last_frequency).abs();
-            let relative_deviation = frequency_deviation / self.last_frequency.max(1.0);
-            self.confidence *= (1.0 - relative_deviation * 0.1).max(0.1);
+            let relative_deviation = frequency_deviation / self.last_frequency.max(F::one());
+            let confidence_decay = F::from(0.1).unwrap();
+            self.confidence = self.confidence
+                * (F::one() - relative_deviation * confidence_decay).max(confidence_decay);
         }
 
         self.frames[frame_index] = Some(FrameData {
@@ -244,56 +399,69 @@ impl FrequencyTrack {
         self.last_frequency = frequency;
     }
 
+    /// Extends the track to the given frame index, filling gaps with None.
     pub fn fill_gaps_to_frame(&mut self, frame_index: usize) {
         self.frames.resize(frame_index + 1, None);
     }
 
+    /// Checks if this track is valid for synthesis based on length and confidence.
     pub fn is_valid(&self, min_length: usize) -> bool {
         let active_frame_count = self.frames.iter().filter(|frame| frame.is_some()).count();
-        active_frame_count >= min_length && self.confidence > 0.1
+        active_frame_count >= min_length && self.confidence > F::from(0.1).unwrap()
     }
 
-    pub fn to_wave(&self, window_size: usize, sample_rate: f32) -> Option<Wave> {
-        let frame_data: Vec<&FrameData> = self.frames.iter().filter_map(Option::as_ref).collect();
+    /// Converts this frequency track to a Wave for synthesis.
+    ///
+    /// Creates amplitude and phase envelopes from the tracked data, applies
+    /// appropriate scaling, and handles missing frames through interpolation.
+    pub fn to_wave(&self, window_size: usize, sample_rate: F) -> Option<Wave<F>>
+    where
+        F: num_traits::Float + Copy + Default + num_traits::FromPrimitive,
+    {
+        let frame_data: Vec<&FrameData<F>> =
+            self.frames.iter().filter_map(Option::as_ref).collect();
 
         if frame_data.is_empty() {
             return None;
         }
 
-        // Calculate representative frequency using weighted average
-        let total_weight: f32 = frame_data.iter().map(|frame| frame.magnitude).sum();
-        if total_weight <= 0.0 {
+        // Calculate representative frequency using magnitude-weighted average
+        let total_weight: F = frame_data
+            .iter()
+            .map(|frame| frame.magnitude)
+            .fold(F::zero(), |acc, val| acc + val);
+        if total_weight <= F::zero() {
             return None;
         }
 
-        let weighted_frequency: f32 = frame_data
+        let weighted_frequency: F = frame_data
             .iter()
             .map(|frame| frame.frequency * frame.magnitude)
-            .sum::<f32>()
+            .fold(F::zero(), |acc, val| acc + val)
             / total_weight;
 
-        // Create amplitude and phase envelopes
-        let (amplitude_envelope, phase_envelope): (Vec<f32>, Vec<f32>) = self
+        // Create amplitude and phase envelopes, interpolating missing frames
+        let (amplitude_envelope, phase_envelope): (Vec<F>, Vec<F>) = self
             .frames
             .iter()
-            .scan(0.0f32, |last_phase, frame_option| match frame_option {
+            .scan(F::zero(), |last_phase, frame_option| match frame_option {
                 Some(data) => {
                     *last_phase = data.phase;
                     Some((data.magnitude, data.phase))
                 }
-                None => Some((0.0, *last_phase)), // Interpolate missing frames
+                None => Some((F::zero(), *last_phase)), // Interpolate missing frames
             })
             .unzip();
 
-        // Apply amplitude scaling that works for all frequency ranges
-        let amplitude_scale = calculate_universal_amplitude_scaling(
+        // Apply frequency-appropriate amplitude scaling
+        let amplitude_scale = calculate_amplitude_scaling(
             &amplitude_envelope,
             window_size,
             sample_rate,
             weighted_frequency,
         );
 
-        let normalized_amplitude: Vec<f32> = amplitude_envelope
+        let normalized_amplitude: Vec<F> = amplitude_envelope
             .iter()
             .map(|&amplitude| amplitude * amplitude_scale * self.confidence)
             .collect();
@@ -302,10 +470,11 @@ impl FrequencyTrack {
         let unwrapped_phase = unwrap_phase(&phase_envelope);
 
         Some(Wave {
+            sample_rate,
             frequency: weighted_frequency,
-            amplitude: Modulation::Envelope(normalized_amplitude),
-            phase: Modulation::Envelope(unwrapped_phase),
-            ..Default::default()
+            amplitude: crate::Modulation::Envelope(normalized_amplitude),
+            phase: crate::Modulation::Envelope(unwrapped_phase),
+            func: crate::WaveFunc::Sine,
         })
     }
 }
