@@ -1,5 +1,5 @@
 use hound::{WavSpec, WavWriter};
-use waver::{Modulation, Wave, Waveform};
+use waver::{Modulation, Wave, Waveform, quantization::QuantizeIterator};
 
 fn main() {
     let spec = WavSpec {
@@ -20,7 +20,7 @@ fn main() {
         ..Default::default()
     };
 
-    let tremolo_wave = Waveform::<i16>::with_wave(
+    let tremolo_wave = Waveform::<f32>::with_wave(
         spec.sample_rate as f32,
         Wave {
             amplitude: Modulation::LFO(Box::new(tremolo_lfo)),
@@ -29,7 +29,8 @@ fn main() {
     );
 
     let mut writer = WavWriter::create("tremolo.wav", spec).unwrap();
-    for sample in tremolo_wave.iter().take(44100) {
+    // Generate float samples and quantize to i16 for WAV output using iterator
+    for sample in tremolo_wave.iter().take(44100).quantize::<i16>() {
         writer.write_sample(sample).unwrap();
     }
     writer.finalize().unwrap();
@@ -41,7 +42,7 @@ fn main() {
         ..Default::default()
     };
 
-    let vibrato_wave = Waveform::<i16>::with_wave(
+    let vibrato_wave = Waveform::<f32>::with_wave(
         spec.sample_rate as f32,
         Wave {
             phase: Modulation::LFO(Box::new(vibrato_lfo)),
@@ -50,7 +51,8 @@ fn main() {
     );
 
     let mut writer = WavWriter::create("vibrato.wav", spec).unwrap();
-    for sample in vibrato_wave.iter().take(44100) {
+    // Generate float samples and quantize to i16 for WAV output using iterator
+    for sample in vibrato_wave.iter().take(44100).quantize::<i16>() {
         writer.write_sample(sample).unwrap();
     }
     writer.finalize().unwrap();

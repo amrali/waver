@@ -1,6 +1,10 @@
 use hound::{WavReader, WavSpec, WavWriter};
 use std::f32::consts::PI;
-use waver::{analysis, Waveform};
+use waver::{
+    analysis,
+    quantization::{dequantize_samples, QuantizeIterator},
+    Waveform,
+};
 
 fn main() {
     // Generate a sample WAV file to analyze.
@@ -11,10 +15,14 @@ fn main() {
         sample_format: hound::SampleFormat::Int,
     };
     let mut writer = WavWriter::create("original.wav", spec).unwrap();
-    for t in (0..44100).map(|x| x as f32 / 44100.0) {
-        let sample = (t * 440.0 * 2.0 * PI).sin() * 0.5 + (t * 880.0 * 2.0 * PI).sin() * 0.5;
-        let amplitude = i16::MAX as f32;
-        writer.write_sample((sample * amplitude) as i16).unwrap();
+
+    // Generate float samples (440Hz + 880Hz harmonics) and quantize to i16 for WAV output using iterator
+    let float_samples = (0..44100)
+        .map(|x| x as f32 / 44100.0)
+        .map(|t| (t * 440.0 * 2.0 * PI).sin() * 0.5 + (t * 880.0 * 2.0 * PI).sin() * 0.5);
+
+    for sample in float_samples.quantize::<i16>() {
+        writer.write_sample(sample).unwrap();
     }
     writer.finalize().unwrap();
 
@@ -22,21 +30,25 @@ fn main() {
     let mut reader = WavReader::open("original.wav").unwrap();
     let samples: Vec<i16> = reader.samples().map(|s| s.unwrap()).collect();
 
-    // Create a waveform from the recorded samples.
-    let waveform: Waveform<i16> =
-        Waveform::from_recorded_samples(spec.sample_rate as f32, &samples);
+    // Convert integer samples back to floats for analysis.
+    let float_samples_for_analysis: Vec<f32> = dequantize_samples(&samples);
+    let waveform: Waveform<f32> =
+        Waveform::from_recorded_samples(spec.sample_rate as f32, &float_samples_for_analysis);
 
     // Synthesize a new waveform.
-    let synthesized_waveform = analysis::synthesize(&waveform, 1024, 256, 2).unwrap();
+    let synthesized_waveform = analysis::synthesize(&waveform, 16384, 4096, 5).unwrap();
 
     // Write the synthesized waveform to a new WAV file.
     let mut writer = WavWriter::create("synthesized.wav", spec).unwrap();
-    synthesized_waveform
+
+    // Convert synthesized float samples to i16 for WAV output using iterator
+    for sample in synthesized_waveform
         .iter()
         .take(samples.len())
-        .for_each(|sample| {
-            writer.write_sample(sample).unwrap();
-        });
+        .quantize::<i16>()
+    {
+        writer.write_sample(sample).unwrap();
+    }
     writer.finalize().unwrap();
 
     println!("Synthesized waveform saved to synthesized.wav");

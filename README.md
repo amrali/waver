@@ -22,12 +22,12 @@ waver = "0.1"
 ```rust
 # extern crate alloc;
 use std::{vec::Vec, f32::consts::PI};
-use waver::{Waveform, Wave, WaveFunc, Modulation};
+use waver::{Waveform, Wave, WaveFunc, Modulation, quantization::quantize_samples};
 use alloc::vec;
 
 fn main() {
-  // 44.1Khz sampling rate and 16-bit depth.
-  let mut wf = waver::Waveform::<i16>::new(44100.0);
+  // 44.1Khz sampling rate with f32 precision.
+  let mut wf = waver::Waveform::<f32>::new(44100.0);
 
   // Superpose a sine wave, a cosine wave and a triangle function.
   wf.superpose(Wave { frequency: 2600.0, ..Default::default() }).unwrap();
@@ -35,8 +35,11 @@ fn main() {
   wf.superpose(Wave { frequency: 2600.0, func: WaveFunc::Triangle, ..Default::default() }).unwrap();
   wf.normalize_amplitudes().unwrap();
 
-  // Quantization of 100 samples
-  let _output: Vec<i16> = wf.iter().take(100).collect();
+  // Generate 100 float samples
+  let float_output: Vec<f32> = wf.iter().take(100).collect();
+
+  // Quantize to 16-bit integers for output
+  let _quantized_output: Vec<i16> = quantize_samples(&float_output);
 }
 ```
 
@@ -68,4 +71,4 @@ questions please feel free to ask.
 [Arduino]: https://www.arduino.cc/
 [Raspberry Pi]: https://www.raspberrypi.org/
 [contributing]: https://github.com/amrali/waver/blob/master/CONTRIBUTING.md
-[when math support moves to libcore]: https://github.com/rust-lang/rfcs/issues/2505
+[when math support moves to libcore]: https://github.com/rust-lang/rust/issues/137578
