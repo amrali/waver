@@ -1,5 +1,5 @@
 use hound::{WavSpec, WavWriter};
-use waver::{Modulation, Wave, Waveform, quantization::QuantizeIterator};
+use waver::{quantization::QuantizeIterator, Modulation, Wave, Waveform};
 
 fn main() {
     let spec = WavSpec {

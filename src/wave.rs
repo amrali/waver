@@ -145,7 +145,11 @@ impl<BitDepth: Float + Copy> Wave<BitDepth> {
     /// ```
     pub fn quantize<QuantizationDepth>(
         &self,
-    ) -> crate::quantization::QuantizationIterator<WaveIterator<'_, BitDepth>, BitDepth, QuantizationDepth>
+    ) -> crate::quantization::QuantizationIterator<
+        WaveIterator<'_, BitDepth>,
+        BitDepth,
+        QuantizationDepth,
+    >
     where
         QuantizationDepth: num_traits::Bounded + num_traits::NumCast + Copy,
         BitDepth: Float + num_traits::NumCast,

@@ -268,7 +268,7 @@ mod tests {
     fn test_quantize_dequantize_chain() {
         // Test chaining: float -> int -> float
         let original = vec![0.0f32, 0.3, -0.7, 0.9, -0.1];
-        
+
         // Using iterators to chain quantization and dequantization
         let round_trip: Vec<f32> = original
             .iter()
