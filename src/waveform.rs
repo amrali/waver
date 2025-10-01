@@ -16,37 +16,31 @@
 
 use crate::{error::Error, Wave, WaveIterator};
 use alloc::vec::Vec;
-use core::{
-    iter::{IntoIterator, Iterator},
-    marker::PhantomData,
-};
-use num_traits::{AsPrimitive, Bounded, NumCast};
+use core::iter::{IntoIterator, Iterator};
+use num_traits::Float;
 
 /// An enum that represents the source of the waveform.
 #[derive(Debug, Clone)]
-pub enum WaveformSource {
+pub enum WaveformSource<BitDepth: Float + Copy> {
     /// A generative waveform that is a superposition of a number of simple
     /// sinusoidal waves.
-    Generative(Vec<Wave>),
+    Generative(Vec<Wave<BitDepth>>),
 
     /// A recorded waveform from a source like a WAV file.
-    Recorded(Vec<i16>),
+    Recorded(Vec<BitDepth>),
 }
 
 /// A structure that represents a complex waveform.
 #[derive(Debug, Clone)]
-pub struct Waveform<BitDepth: Clone> {
+pub struct Waveform<BitDepth: Float + Copy> {
     /// The source of the waveform.
-    pub source: WaveformSource,
+    pub source: WaveformSource<BitDepth>,
 
     /// The sampling rate of this waveform.
-    pub sample_rate: f32,
-
-    /// Phantom data to hold the bit depth.
-    _marker: PhantomData<BitDepth>,
+    pub sample_rate: BitDepth,
 }
 
-impl<BitDepth: Clone> Waveform<BitDepth> {
+impl<BitDepth: Float + Copy> Waveform<BitDepth> {
     /// Construct a new empty waveform.
     ///
     /// At construction the sampling rate of the waveform must be specified.
@@ -56,13 +50,12 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     /// ```
     /// use waver::Waveform;
     ///
-    /// let wf = Waveform::<i16>::new(44100.0);
+    /// let wf = Waveform::<f32>::new(44100.0);
     /// ```
-    pub fn new(sample_rate: f32) -> Self {
+    pub fn new(sample_rate: BitDepth) -> Self {
         Self {
             sample_rate,
             source: WaveformSource::Generative(Vec::new()),
-            _marker: PhantomData,
         }
     }
 
@@ -75,10 +68,10 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     /// ```
     /// use waver::{Waveform, Wave};
     ///
-    /// let wf = Waveform::<i16>::with_wave(44100.0,
+    /// let wf = Waveform::<f32>::with_wave(44100.0,
     ///     Wave { frequency: 4000.0, ..Default::default() });
     /// ```
-    pub fn with_wave(sample_rate: f32, wave: Wave) -> Self {
+    pub fn with_wave(sample_rate: BitDepth, wave: Wave<BitDepth>) -> Self {
         let mut wf = Self::new(sample_rate);
         wf.superpose(wave).unwrap();
         wf
@@ -95,12 +88,12 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     /// ```
     /// use waver::{Waveform, Wave};
     ///
-    /// let mut wf = Waveform::<i16>::new(44100.0);
+    /// let mut wf = Waveform::<f32>::new(44100.0);
     /// wf.superpose(Wave { frequency: 6000.0, amplitude: 0.25.into(), ..Default::default() })
     ///     .unwrap()
     ///     .superpose(Wave { frequency: 5500.0, amplitude: 0.75.into(), ..Default::default() });
     /// ```
-    pub fn superpose(&mut self, wave: Wave) -> Result<&mut Self, Error> {
+    pub fn superpose(&mut self, wave: Wave<BitDepth>) -> Result<&mut Self, Error> {
         if let WaveformSource::Generative(components) = &mut self.source {
             components.push(Wave {
                 sample_rate: self.sample_rate,
@@ -132,13 +125,14 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     /// use waver::{Waveform, Wave};
     ///
     /// // Two waves with an amplitude weights of 150%.
-    /// let mut wf = Waveform::<i16>::with_wave(44100.0,
+    /// let mut wf = Waveform::<f32>::with_wave(44100.0,
     ///     Wave { frequency: 3000.0, amplitude: 1.0.into(), ..Default::default() });
     /// wf.superpose(Wave { frequency: 4000.0, amplitude: 0.5.into(), ..Default::default() }).unwrap().normalize_amplitudes().unwrap();
     /// ```
     pub fn normalize_amplitudes(&mut self) -> Result<&mut Self, Error> {
         if let WaveformSource::Generative(components) = &mut self.source {
-            let amp_ratio = 1.0 / components.len() as f32;
+            let amp_ratio =
+                BitDepth::one() / BitDepth::from(components.len()).unwrap_or(BitDepth::one());
             components
                 .iter_mut()
                 .for_each(|c| c.amplitude = amp_ratio.into());
@@ -149,11 +143,10 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     }
 
     /// Creates a `Waveform` from a recorded sample buffer.
-    pub fn from_recorded_samples(sample_rate: f32, samples: &[i16]) -> Self {
+    pub fn from_recorded_samples(sample_rate: BitDepth, samples: &[BitDepth]) -> Self {
         Self {
             sample_rate,
             source: WaveformSource::Recorded(samples.to_vec()),
-            _marker: PhantomData,
         }
     }
 
@@ -168,7 +161,7 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     /// use std::f32::consts::PI;
     /// use waver::{Waveform, Wave};
     ///
-    /// let mut wf = Waveform::<i16>::new(44100.0);
+    /// let mut wf = Waveform::<f32>::new(44100.0);
     /// wf.superpose(Wave { frequency: 4000.0, phase: (PI / 2.0).into(), ..Default::default() }).unwrap();
     /// let mut iter = wf.iter();
     /// let mut res = Vec::new();
@@ -192,9 +185,7 @@ impl<BitDepth: Clone> Waveform<BitDepth> {
     }
 }
 
-impl<'a, BitDepth: Bounded + NumCast + AsPrimitive<f32> + Clone> IntoIterator
-    for &'a Waveform<BitDepth>
-{
+impl<'a, BitDepth: Float + Copy + core::iter::Sum> IntoIterator for &'a Waveform<BitDepth> {
     type Item = BitDepth;
     type IntoIter = WaveformIterator<'a, BitDepth>;
 
@@ -204,38 +195,37 @@ impl<'a, BitDepth: Bounded + NumCast + AsPrimitive<f32> + Clone> IntoIterator
 }
 
 /// The source for the WaveformIterator.
-pub enum WaveformIteratorSource<'a> {
+pub enum WaveformIteratorSource<'a, BitDepth: Float + Copy> {
     /// An iterator for a generative waveform.
-    Generative(Vec<WaveIterator<'a>>),
+    Generative(Vec<WaveIterator<'a, BitDepth>>),
 
     /// An iterator for a recorded waveform.
-    Recorded(core::slice::Iter<'a, i16>),
+    Recorded(core::slice::Iter<'a, BitDepth>),
 }
 
 /// Iterator for Waveform structure.
 ///
 /// For generative waveforms, if any underlying iterator ends early (e.g., due to numerical instability),
 /// the iterator will yield zero for that component in subsequent iterations.
-pub struct WaveformIterator<'a, BitDepth: Clone> {
+pub struct WaveformIterator<'a, BitDepth: Float + Copy> {
     _inner: &'a Waveform<BitDepth>,
-    source: WaveformIteratorSource<'a>,
+    source: WaveformIteratorSource<'a, BitDepth>,
 }
 
-impl<'a, BitDepth: Bounded + NumCast + AsPrimitive<f32> + Clone> Iterator
-    for WaveformIterator<'a, BitDepth>
-{
+impl<'a, BitDepth: Float + Copy + core::iter::Sum> Iterator for WaveformIterator<'a, BitDepth> {
     type Item = BitDepth;
 
     fn next(&mut self) -> Option<Self::Item> {
         match &mut self.source {
             WaveformIteratorSource::Generative(iters) => {
                 // Superpose all waveform components.
-                let superposition: f32 = iters.iter_mut().map(|x| x.next().unwrap_or(0.0)).sum();
-                NumCast::from(superposition * BitDepth::max_value().as_())
+                let superposition: BitDepth = iters
+                    .iter_mut()
+                    .map(|x| x.next().unwrap_or(BitDepth::zero()))
+                    .sum();
+                Some(superposition)
             }
-            WaveformIteratorSource::Recorded(iter) => {
-                iter.next().map(|&sample| NumCast::from(sample).unwrap())
-            }
+            WaveformIteratorSource::Recorded(iter) => iter.next().cloned(),
         }
     }
 }
@@ -255,29 +245,25 @@ mod tests {
             frequency: 3000.0,
             ..Default::default()
         };
-        let wf = Waveform::<i16>::with_wave(44100.0, w3khz.clone());
+        let wf = Waveform::<f32>::with_wave(44100.0, w3khz.clone());
 
-        let w1: Vec<i16> = wf.iter().take(100).collect();
-        let w2: Vec<i16> = w3khz
-            .iter()
-            .take(100)
-            .map(|c| (c * i16::MAX as f32) as i16)
-            .collect();
+        let w1: Vec<f32> = wf.iter().take(100).collect();
+        let w2: Vec<f32> = w3khz.iter().take(100).collect();
 
         assert_eq!(w1, w2);
 
         // Test empty waveform
-        let wf_empty = Waveform::<i8>::new(44100.0);
-        let v: Vec<i8> = wf_empty.iter().take(10).collect();
-        assert_eq!(v, [0i8; 10]);
+        let wf_empty = Waveform::<f32>::new(44100.0);
+        let v: Vec<f32> = wf_empty.iter().take(10).collect();
+        assert_eq!(v, [0.0f32; 10]);
 
         // Test basic iteration
-        let wf_iter = Waveform::<i8>::new(44100.0);
+        let wf_iter = Waveform::<f32>::new(44100.0);
         let mut itr = wf_iter.into_iter();
-        assert_eq!(itr.next().unwrap(), 0);
+        assert_eq!(itr.next().unwrap(), 0.0);
 
         // Test construction equivalence
-        let wf1 = Waveform::<i16>::with_wave(
+        let wf1 = Waveform::<f32>::with_wave(
             44100.0,
             Wave {
                 frequency: 3400.0,
@@ -285,15 +271,15 @@ mod tests {
                 ..Default::default()
             },
         );
-        let mut wf2 = Waveform::<i16>::new(44100.0);
+        let mut wf2 = Waveform::<f32>::new(44100.0);
 
-        let v1: Vec<i16> = wf1.iter().take(100).collect();
+        let v1: Vec<f32> = wf1.iter().take(100).collect();
         wf2.superpose(Wave {
             frequency: 3400.0,
             ..Default::default()
         })
         .unwrap();
-        let v2: Vec<i16> = wf2.iter().take(100).collect();
+        let v2: Vec<f32> = wf2.iter().take(100).collect();
 
         assert_eq!(v1, v2);
     }
@@ -301,7 +287,7 @@ mod tests {
     #[test]
     fn test_waveform_amplitude_normalization_comprehensive() {
         // Test basic amplitude normalization
-        let mut wf = Waveform::<i16>::with_wave(
+        let mut wf = Waveform::<f32>::with_wave(
             44100.0,
             Wave {
                 frequency: 4000.0,
@@ -328,7 +314,7 @@ mod tests {
         }
 
         // Test single wave normalization edge case
-        let mut single_wave_wf = Waveform::<i16>::with_wave(
+        let mut single_wave_wf = Waveform::<f32>::with_wave(
             44100.0,
             Wave {
                 frequency: 440.0,
@@ -350,7 +336,7 @@ mod tests {
         }
 
         // Test many waves normalization edge case
-        let mut many_waves_wf = Waveform::<i16>::new(44100.0);
+        let mut many_waves_wf = Waveform::<f32>::new(44100.0);
         for i in 1..=10 {
             let wave = Wave {
                 frequency: 100.0 * i as f32,
@@ -378,8 +364,8 @@ mod tests {
     #[test]
     fn test_recorded_waveform_comprehensive() {
         // Test basic recorded waveform creation and iteration
-        let samples = vec![0, 1, 2, 3, 4];
-        let wf = Waveform::<i16>::from_recorded_samples(44100.0, &samples);
+        let samples = vec![0.0, 0.1, 0.2, 0.3, 0.4];
+        let wf = Waveform::<f32>::from_recorded_samples(44100.0, &samples);
 
         // Verify source data is stored correctly
         if let WaveformSource::Recorded(ref data) = wf.source {
@@ -389,12 +375,12 @@ mod tests {
         }
 
         // Verify iteration works correctly
-        let collected: Vec<i16> = wf.iter().collect();
+        let collected: Vec<f32> = wf.iter().collect();
         assert_eq!(collected, samples);
 
         // Test error conditions on recorded waveform
-        let error_samples = vec![100i16, 200, 300, 400, 500];
-        let mut recorded_waveform: Waveform<i16> =
+        let error_samples = vec![0.1f32, 0.2, 0.3, 0.4, 0.5];
+        let mut recorded_waveform: Waveform<f32> =
             Waveform::from_recorded_samples(44100.0, &error_samples);
 
         // Test superpose on recorded waveform (should error)
@@ -418,31 +404,31 @@ mod tests {
         assert_eq!(result.unwrap_err(), Error::UnsupportedSource);
 
         // Test edge cases: empty samples
-        let empty_samples: Vec<i16> = vec![];
-        let empty_waveform: Waveform<i16> =
+        let empty_samples: Vec<f32> = vec![];
+        let empty_waveform: Waveform<f32> =
             Waveform::from_recorded_samples(44100.0, &empty_samples);
-        let empty_result: Vec<i16> = empty_waveform.iter().collect();
+        let empty_result: Vec<f32> = empty_waveform.iter().collect();
         assert!(
             empty_result.is_empty(),
             "Empty waveform should produce no samples"
         );
 
         // Test edge cases: single sample
-        let single_sample = vec![1234i16];
-        let single_waveform: Waveform<i16> =
+        let single_sample = vec![0.7f32];
+        let single_waveform: Waveform<f32> =
             Waveform::from_recorded_samples(44100.0, &single_sample);
-        let single_result: Vec<i16> = single_waveform.iter().collect();
+        let single_result: Vec<f32> = single_waveform.iter().collect();
         assert_eq!(
             single_result,
-            vec![1234i16],
+            vec![0.7f32],
             "Single sample should be preserved"
         );
 
         // Test edge cases: extreme sample values
-        let extreme_samples = vec![i16::MIN, i16::MAX, 0, i16::MIN / 2, i16::MAX / 2];
-        let extreme_waveform: Waveform<i16> =
+        let extreme_samples = vec![-1.0f32, 1.0, 0.0, -0.5, 0.5];
+        let extreme_waveform: Waveform<f32> =
             Waveform::from_recorded_samples(44100.0, &extreme_samples);
-        let extreme_result: Vec<i16> = extreme_waveform.iter().collect();
+        let extreme_result: Vec<f32> = extreme_waveform.iter().collect();
         assert_eq!(
             extreme_result, extreme_samples,
             "Extreme samples should be preserved"
@@ -450,36 +436,13 @@ mod tests {
     }
 
     #[test]
-    fn test_waveform_bit_depth_comprehensive() {
+    fn test_waveform_float_bit_depth_comprehensive() {
         let sample_rate = 44100.0;
         let wave = Wave {
             frequency: 440.0,
             amplitude: Modulation::Static(0.8),
             ..Default::default()
         };
-
-        // Test i8 bit depth
-        let wf_i8 = Waveform::<i8>::with_wave(sample_rate, wave.clone());
-        let samples_i8: Vec<i8> = wf_i8.iter().take(10).collect();
-        assert_eq!(samples_i8.len(), 10);
-        assert!(
-            samples_i8.iter().any(|&x| x != 0),
-            "Should produce non-zero samples"
-        );
-
-        // Test u8 bit depth
-        let wf_u8 = Waveform::<u8>::with_wave(sample_rate, wave.clone());
-        let samples_u8: Vec<u8> = wf_u8.iter().take(10).collect();
-        assert_eq!(samples_u8.len(), 10);
-
-        // Test i32 bit depth
-        let wf_i32 = Waveform::<i32>::with_wave(sample_rate, wave.clone());
-        let samples_i32: Vec<i32> = wf_i32.iter().take(10).collect();
-        assert_eq!(samples_i32.len(), 10);
-        assert!(
-            samples_i32.iter().any(|&x| x.abs() > 1000),
-            "Should produce scaled samples for i32"
-        );
 
         // Test f32 bit depth
         let wf_f32 = Waveform::<f32>::with_wave(sample_rate, wave.clone());
@@ -490,6 +453,20 @@ mod tests {
             "f32 samples should be finite"
         );
 
+        // Test f64 bit depth
+        let wave_f64 = Wave {
+            frequency: 440.0,
+            amplitude: Modulation::Static(0.8),
+            ..Default::default()
+        };
+        let wf_f64 = Waveform::<f64>::with_wave(sample_rate as f64, wave_f64);
+        let samples_f64: Vec<f64> = wf_f64.iter().take(10).collect();
+        assert_eq!(samples_f64.len(), 10);
+        assert!(
+            samples_f64.iter().all(|&x| x.is_finite()),
+            "f64 samples should be finite"
+        );
+
         // Test corner cases with specific bit depths
         let corner_wave = Wave {
             sample_rate: 44100.0,
@@ -498,38 +475,36 @@ mod tests {
             ..Default::default()
         };
 
-        // Test u16 corner case
-        let wf_u16 = Waveform::<u16>::with_wave(44100.0, corner_wave.clone());
-        let samples_u16: Vec<u16> = wf_u16.iter().take(10).collect();
+        // Test f32 corner case
+        let wf_f32_corner = Waveform::<f32>::with_wave(44100.0, corner_wave.clone());
+        let samples_f32_corner: Vec<f32> = wf_f32_corner.iter().take(10).collect();
         assert_eq!(
-            samples_u16.len(),
+            samples_f32_corner.len(),
             10,
-            "Should generate exactly 10 u16 samples"
+            "Should generate exactly 10 f32 samples"
         );
         assert!(
-            samples_u16.iter().all(|&x| x <= u16::MAX),
-            "u16 samples should be in valid range"
-        );
-        assert!(
-            samples_u16.iter().any(|&x| x > 1000),
-            "Should have some significant u16 values"
+            samples_f32_corner.iter().any(|&x| x.abs() > 0.1),
+            "Should have some significant f32 values"
         );
 
-        // Test i64 corner case
-        let wf_i64 = Waveform::<i64>::with_wave(44100.0, corner_wave);
-        let samples_i64: Vec<i64> = wf_i64.iter().take(10).collect();
+        // Test f64 corner case with double precision
+        let corner_wave_f64 = Wave {
+            sample_rate: 44100.0,
+            frequency: 1000.0,
+            amplitude: Modulation::Static(1.0),
+            ..Default::default()
+        };
+        let wf_f64_corner = Waveform::<f64>::with_wave(44100.0, corner_wave_f64);
+        let samples_f64_corner: Vec<f64> = wf_f64_corner.iter().take(10).collect();
         assert_eq!(
-            samples_i64.len(),
+            samples_f64_corner.len(),
             10,
-            "Should generate exactly 10 i64 samples"
+            "Should generate exactly 10 f64 samples"
         );
         assert!(
-            samples_i64.iter().any(|&x| x.abs() > 1_000_000),
-            "i64 should produce large-scale samples"
-        );
-        assert!(
-            samples_i64.iter().all(|&x| x.abs() <= i64::MAX),
-            "i64 samples should not exceed maximum value"
+            samples_f64_corner.iter().any(|&x| x.abs() > 0.1),
+            "f64 should produce significant samples"
         );
     }
 
@@ -538,7 +513,7 @@ mod tests {
         use core::f32::consts::PI;
 
         // Test superposition with different wave functions
-        let mut waveform = Waveform::<i16>::new(44100.0);
+        let mut waveform = Waveform::<f32>::new(44100.0);
 
         let functions = [
             WaveFunc::Sine,
@@ -558,20 +533,20 @@ mod tests {
             waveform.superpose(wave).unwrap();
         }
 
-        let samples: Vec<i16> = waveform.iter().take(1000).collect();
+        let samples: Vec<f32> = waveform.iter().take(1000).collect();
         assert_eq!(samples.len(), 1000);
 
         // Should produce complex waveform with all functions combined
-        let variance = calculate_variance(&samples.iter().map(|&x| x as f32).collect::<Vec<_>>());
+        let variance = calculate_variance(&samples);
         assert!(
-            variance > 1000.0,
+            variance > 0.01,
             "Combined waveform should have significant variance"
         );
 
         // Test numerical stability with potential overflow conditions
-        let mut unstable_wf = Waveform::<i16>::new(44100.0);
+        let mut stable_wf = Waveform::<f32>::new(44100.0);
 
-        // Add waves with combined amplitude > 100%
+        // Add waves with combined amplitude that's manageable for floats
         for i in 1..=5 {
             let wave = Wave {
                 sample_rate: 44100.0,
@@ -580,31 +555,27 @@ mod tests {
                 phase: Modulation::Static(0.0),
                 func: crate::WaveFunc::Sine,
             };
-            unstable_wf.superpose(wave).unwrap();
+            stable_wf.superpose(wave).unwrap();
         }
 
-        // Should produce samples with moderate overflow handling
-        let stability_samples: Vec<i16> = unstable_wf.iter().take(100).collect();
+        // Should produce samples with good stability
+        let stability_samples: Vec<f32> = stable_wf.iter().take(100).collect();
 
-        // With reduced amplitudes, should get all requested samples
+        // Should get all requested samples with float precision
         assert_eq!(
             stability_samples.len(),
             100,
-            "Should produce exactly 100 samples with manageable configuration"
-        );
-        assert!(
-            stability_samples.iter().all(|&x| x.abs() <= i16::MAX),
-            "Samples should not exceed bit depth limits"
+            "Should produce exactly 100 samples with float configuration"
         );
 
         // Check for significant amplitude with 5 superposed waves
         let max_amplitude = stability_samples
             .iter()
             .map(|&x| x.abs())
-            .max()
-            .unwrap_or(0);
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap_or(0.0);
         assert!(
-            max_amplitude > 1000,
+            max_amplitude > 0.1,
             "Should have significant amplitude with 5 superposed waves"
         );
 
@@ -620,19 +591,19 @@ mod tests {
             func: WaveFunc::Sine,
         };
 
-        let modulated_waveform = Waveform::<i16>::with_wave(44100.0, modulated_wave);
-        let modulated_samples: Vec<i16> =
+        let modulated_waveform = Waveform::<f32>::with_wave(44100.0, modulated_wave);
+        let modulated_samples: Vec<f32> =
             modulated_waveform.iter().take(amp_envelope.len()).collect();
 
         assert_eq!(modulated_samples.len(), amp_envelope.len());
 
         // First and last samples should be near zero due to amplitude envelope
         assert!(
-            modulated_samples[0].abs() < 1000,
+            modulated_samples[0].abs() < 0.01,
             "First sample should be small"
         );
         assert!(
-            modulated_samples[modulated_samples.len() - 1].abs() < 1000,
+            modulated_samples[modulated_samples.len() - 1].abs() < 0.01,
             "Last sample should be small"
         );
     }
@@ -646,10 +617,10 @@ mod tests {
             ..Default::default()
         };
 
-        let zero_amp_waveform = Waveform::<i16>::with_wave(44100.0, zero_amp_wave);
-        let zero_samples: Vec<i16> = zero_amp_waveform.iter().take(100).collect();
+        let zero_amp_waveform = Waveform::<f32>::with_wave(44100.0, zero_amp_wave);
+        let zero_samples: Vec<f32> = zero_amp_waveform.iter().take(100).collect();
         assert!(
-            zero_samples.iter().all(|&x| x == 0),
+            zero_samples.iter().all(|&x| x == 0.0),
             "Zero amplitude should produce zero samples"
         );
 
@@ -660,20 +631,22 @@ mod tests {
             ..Default::default()
         };
 
-        let zero_freq_waveform = Waveform::<i16>::with_wave(44100.0, zero_freq_wave);
-        let freq_samples: Vec<i16> = zero_freq_waveform.iter().take(100).collect();
+        let zero_freq_waveform = Waveform::<f32>::with_wave(44100.0, zero_freq_wave);
+        let freq_samples: Vec<f32> = zero_freq_waveform.iter().take(100).collect();
         let first_sample = freq_samples[0];
         assert!(
-            freq_samples.iter().all(|&x| x == first_sample),
+            freq_samples
+                .iter()
+                .all(|&x| (x - first_sample).abs() < 1e-6),
             "Zero frequency should produce constant output"
         );
 
         // Test with extreme sample rates
-        let _low_sr_waveform = Waveform::<i16>::new(8.0);
-        let _high_sr_waveform = Waveform::<i16>::new(192000.0);
+        let _low_sr_waveform = Waveform::<f32>::new(8.0);
+        let _high_sr_waveform = Waveform::<f32>::new(192000.0);
 
-        // Test iterator halt on numerical instability
-        let mut unstable_wf = Waveform::<i16>::with_wave(
+        // Test iterator stability with floating point precision
+        let mut stable_wf = Waveform::<f32>::with_wave(
             44100.0,
             Wave {
                 frequency: 4000.0,
@@ -681,18 +654,22 @@ mod tests {
                 ..Default::default()
             },
         );
-        unstable_wf
+        stable_wf
             .superpose(Wave {
                 frequency: 5000.0,
                 amplitude: 0.5.into(),
                 ..Default::default()
             })
             .unwrap();
-        let unstable_samples: Vec<i16> = unstable_wf.iter().take(100).collect();
-        assert_ne!(
-            unstable_samples.len(),
+        let stable_samples: Vec<f32> = stable_wf.iter().take(100).collect();
+        assert_eq!(
+            stable_samples.len(),
             100,
-            "Iterator should halt on numerical instability"
+            "Float iterator should be stable and produce all requested samples"
+        );
+        assert!(
+            stable_samples.iter().all(|&x| x.is_finite()),
+            "All float samples should be finite"
         );
     }
 
@@ -704,5 +681,80 @@ mod tests {
         let variance =
             samples.iter().map(|&x| (x - mean).powi(2)).sum::<f32>() / samples.len() as f32;
         variance
+    }
+
+    #[test]
+    fn test_recorded_waveform_float_bit_depths() {
+        // Test f32 recorded samples
+        let samples_f32: Vec<f32> = vec![-1.0, -0.5, 0.0, 0.5, 1.0];
+        let wf_f32 = Waveform::<f32>::from_recorded_samples(44100.0, &samples_f32);
+        let collected_f32: Vec<f32> = wf_f32.iter().collect();
+        assert_eq!(
+            samples_f32, collected_f32,
+            "f32 recorded samples should be preserved"
+        );
+
+        // Verify source type is correct
+        if let WaveformSource::Recorded(ref data) = wf_f32.source {
+            assert_eq!(*data, samples_f32);
+        } else {
+            panic!("Expected recorded waveform for f32");
+        }
+
+        // Test f64 recorded samples
+        let samples_f64: Vec<f64> = vec![-1.0, -0.5, 0.0, 0.5, 1.0];
+        let wf_f64 = Waveform::<f64>::from_recorded_samples(44100.0, &samples_f64);
+        let collected_f64: Vec<f64> = wf_f64.iter().collect();
+        assert_eq!(
+            samples_f64, collected_f64,
+            "f64 recorded samples should be preserved in storage and iteration"
+        );
+
+        // Verify source stores f64 precision
+        if let WaveformSource::Recorded(ref data) = wf_f64.source {
+            assert_eq!(*data, samples_f64);
+        } else {
+            panic!("Expected recorded waveform for f64");
+        }
+
+        // Test error conditions still work with different float bit depths
+        let mut recorded_f32: Waveform<f32> =
+            Waveform::from_recorded_samples(44100.0, &samples_f32);
+        let wave = Wave {
+            frequency: 440.0,
+            ..Default::default()
+        };
+
+        let result = recorded_f32.superpose(wave);
+        assert!(
+            result.is_err(),
+            "Should not be able to superpose on f32 recorded waveform"
+        );
+        assert_eq!(result.unwrap_err(), Error::UnsupportedSource);
+
+        let result = recorded_f32.normalize_amplitudes();
+        assert!(
+            result.is_err(),
+            "Should not be able to normalize f32 recorded waveform amplitudes"
+        );
+        assert_eq!(result.unwrap_err(), Error::UnsupportedSource);
+
+        // Test empty samples with different bit depths
+        let empty_f32: Vec<f32> = vec![];
+        let empty_wf_f32: Waveform<f32> = Waveform::from_recorded_samples(44100.0, &empty_f32);
+        let empty_result_f32: Vec<f32> = empty_wf_f32.iter().collect();
+        assert!(
+            empty_result_f32.is_empty(),
+            "Empty f32 waveform should produce no samples"
+        );
+
+        // Test precision differences between f32 and f64
+        let precise_samples_f64: Vec<f64> = vec![0.123456789012345, 0.987654321098765];
+        let wf_precise_f64 = Waveform::<f64>::from_recorded_samples(44100.0, &precise_samples_f64);
+        let collected_precise_f64: Vec<f64> = wf_precise_f64.iter().collect();
+        assert_eq!(
+            precise_samples_f64, collected_precise_f64,
+            "f64 should preserve higher precision samples"
+        );
     }
 }

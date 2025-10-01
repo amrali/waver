@@ -32,11 +32,11 @@
 //! ```rust
 //! # extern crate alloc;
 //! use std::{vec::Vec, f32::consts::PI};
-//! use waver::{Waveform, Wave, WaveFunc};
+//! use waver::{Waveform, Wave, WaveFunc, quantization::quantize_samples};
 //! use alloc::vec;
 //!
-//! // 44.1Khz sampling rate and 16-bit depth.
-//! let mut wf = waver::Waveform::<i16>::new(44100.0);
+//! // 44.1Khz sampling rate with f32 precision.
+//! let mut wf = waver::Waveform::<f32>::new(44100.0);
 //!
 //! // Superpose a sine wave, a cosine wave and a triangle function.
 //! wf.superpose(Wave { frequency: 2600.0, ..Default::default() }).unwrap();
@@ -44,8 +44,11 @@
 //! wf.superpose(Wave { frequency: 2600.0, func: WaveFunc::Triangle, ..Default::default() }).unwrap();
 //! wf.normalize_amplitudes().unwrap();
 //!
-//! // Quantization of 100 samples
-//! let _output: Vec<i16> = wf.iter().take(100).collect();
+//! // Generate 100 float samples
+//! let float_output: Vec<f32> = wf.iter().take(100).collect();
+//!
+//! // Quantize to 16-bit integers
+//! let quantized_output: Vec<i16> = quantize_samples(&float_output);
 //! ```
 
 #![cfg_attr(not(test), no_std)]
@@ -54,11 +57,16 @@ extern crate alloc;
 
 pub mod analysis;
 pub mod error;
+pub mod quantization;
 mod wave;
 mod waveform;
 
 pub use self::error::Error;
-pub use wave::{Modulation, Wave, WaveFunc, WaveIterator};
+pub use quantization::{
+    dequantize_samples, quantize_samples, DequantizationIterator, DequantizeIterator,
+    QuantizationIterator, QuantizeIterator,
+};
+pub use wave::{Modulation, QuantizedWaveIterator, Wave, WaveFunc, WaveIterator};
 pub use waveform::{Waveform, WaveformIterator, WaveformSource};
 
 // Test README.md

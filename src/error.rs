@@ -23,4 +23,10 @@ pub enum Error {
     /// An operation was attempted on a waveform with an unsupported source.
     /// For example, trying to superpose a wave on a recorded waveform.
     UnsupportedSource,
+
+    /// Invalid analysis parameters were provided.
+    InvalidParameters {
+        /// Description of the parameter error.
+        message: &'static str,
+    },
 }
