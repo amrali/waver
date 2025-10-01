@@ -128,35 +128,6 @@ impl<BitDepth: Float + Copy> Wave<BitDepth> {
     pub fn iter(&self) -> WaveIterator<'_, BitDepth> {
         self.into_iter()
     }
-
-    /// Quantize the wave samples to a specific quantization depth.
-    ///
-    /// This method provides a convenient way to quantize wave samples using
-    /// the quantization module's iterator infrastructure. It's equivalent to
-    /// calling `wave.iter().quantize()` but provides a more direct API.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use waver::Wave;
-    ///
-    /// let wave: Wave<f32> = Wave { sample_rate: 44100.0, frequency: 440.0, ..Default::default() };
-    /// let quantized_samples: Vec<i16> = wave.quantize().take(100).collect();
-    /// ```
-    pub fn quantize<QuantizationDepth>(
-        &self,
-    ) -> crate::quantization::QuantizationIterator<
-        WaveIterator<'_, BitDepth>,
-        BitDepth,
-        QuantizationDepth,
-    >
-    where
-        QuantizationDepth: num_traits::Bounded + num_traits::NumCast + Copy,
-        BitDepth: Float + num_traits::NumCast,
-    {
-        use crate::quantization::QuantizeIterator;
-        self.iter().quantize()
-    }
 }
 
 impl<'a, BitDepth: Float + Copy> IntoIterator for &'a Wave<BitDepth> {
@@ -1293,6 +1264,8 @@ mod tests {
 
     #[test]
     fn test_wave_quantization() {
+        use crate::quantization::QuantizeIterator;
+        
         // Test quantization functionality with various bit depths
         let wave = Wave::<f32> {
             sample_rate: 44100.0,
@@ -1303,7 +1276,7 @@ mod tests {
         };
 
         // Test quantization to i16 (16-bit signed)
-        let quantized_i16: Vec<i16> = wave.quantize().take(10).collect();
+        let quantized_i16: Vec<i16> = wave.iter().quantize().take(10).collect();
         assert_eq!(
             quantized_i16.len(),
             10,
@@ -1324,7 +1297,7 @@ mod tests {
         );
 
         // Test quantization to i8 (8-bit signed)
-        let quantized_i8: Vec<i8> = wave.quantize().take(10).collect();
+        let quantized_i8: Vec<i8> = wave.iter().quantize().take(10).collect();
         assert_eq!(
             quantized_i8.len(),
             10,
@@ -1337,7 +1310,7 @@ mod tests {
         assert_eq!(quantized_i8[0], 0, "First i8 sample should be zero");
 
         // Test quantization to u16 (16-bit unsigned)
-        let quantized_u16: Vec<u16> = wave.quantize().take(10).collect();
+        let quantized_u16: Vec<u16> = wave.iter().quantize().take(10).collect();
         assert_eq!(
             quantized_u16.len(),
             10,
@@ -1357,7 +1330,7 @@ mod tests {
             func: WaveFunc::Square,
         };
 
-        let square_quantized: Vec<i16> = square_wave.quantize().take(10).collect();
+        let square_quantized: Vec<i16> = square_wave.iter().quantize().take(10).collect();
         assert_eq!(
             square_quantized.len(),
             10,
@@ -1383,7 +1356,7 @@ mod tests {
             func: WaveFunc::Sine,
         };
 
-        let modulated_quantized: Vec<i16> = modulated_wave.quantize().take(100).collect();
+        let modulated_quantized: Vec<i16> = modulated_wave.iter().quantize().take(100).collect();
         let max_amplitude = modulated_quantized
             .iter()
             .map(|&x| x.abs())
@@ -1401,7 +1374,7 @@ mod tests {
         );
 
         // Test quantization to f32 (should work as pass-through scaling)
-        let quantized_f32: Vec<f32> = wave.quantize().take(10).collect();
+        let quantized_f32: Vec<f32> = wave.iter().quantize().take(10).collect();
         assert_eq!(quantized_f32.len(), 10, "Should produce f32 samples");
         assert!(
             quantized_f32.iter().all(|x| x.is_finite()),
