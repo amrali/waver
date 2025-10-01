@@ -21,7 +21,7 @@ use core::{
     iter::{IntoIterator, Iterator},
 };
 use libm::{asinf, copysignf, cosf, sinf};
-use num_traits::{AsPrimitive, Bounded, Float, NumCast};
+use num_traits::Float;
 
 /// An enum that represents the kind of the wave function.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -131,10 +131,9 @@ impl<BitDepth: Float + Copy> Wave<BitDepth> {
 
     /// Quantize the wave samples to a specific quantization depth.
     ///
-    /// This method returns an iterator that produces samples quantized to the
-    /// specified `QuantizationDepth` type. The quantization process converts
-    /// the floating-point wave samples to the target integer or floating-point
-    /// format with appropriate scaling and clamping.
+    /// This method provides a convenient way to quantize wave samples using
+    /// the quantization module's iterator infrastructure. It's equivalent to
+    /// calling `wave.iter().quantize()` but provides a more direct API.
     ///
     /// # Examples
     ///
@@ -146,44 +145,13 @@ impl<BitDepth: Float + Copy> Wave<BitDepth> {
     /// ```
     pub fn quantize<QuantizationDepth>(
         &self,
-    ) -> QuantizedWaveIterator<'_, BitDepth, QuantizationDepth>
+    ) -> crate::quantization::QuantizationIterator<WaveIterator<'_, BitDepth>, BitDepth, QuantizationDepth>
     where
-        QuantizationDepth: Bounded + NumCast + Copy,
-        BitDepth: AsPrimitive<f32>,
+        QuantizationDepth: num_traits::Bounded + num_traits::NumCast + Copy,
+        BitDepth: Float + num_traits::NumCast,
     {
-        QuantizedWaveIterator {
-            wave_iter: self.iter(),
-            _phantom: core::marker::PhantomData,
-        }
-    }
-}
-
-/// Iterator for quantized Wave samples.
-pub struct QuantizedWaveIterator<'a, BitDepth, QuantizationDepth>
-where
-    BitDepth: Float + Copy,
-    QuantizationDepth: Bounded + NumCast + Copy,
-{
-    wave_iter: WaveIterator<'a, BitDepth>,
-    _phantom: core::marker::PhantomData<QuantizationDepth>,
-}
-
-impl<'a, BitDepth, QuantizationDepth> Iterator
-    for QuantizedWaveIterator<'a, BitDepth, QuantizationDepth>
-where
-    BitDepth: Float + Copy + AsPrimitive<f32>,
-    QuantizationDepth: Bounded + NumCast + Copy,
-{
-    type Item = QuantizationDepth;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let sample = self.wave_iter.next()?;
-        let sample_f32: f32 = sample.as_();
-        // Scale the sample to the quantization depth range
-        let max_val = QuantizationDepth::max_value();
-        let scaled_sample = sample_f32 * NumCast::from(max_val).unwrap_or(0.0_f32);
-
-        NumCast::from(scaled_sample)
+        use crate::quantization::QuantizeIterator;
+        self.iter().quantize()
     }
 }
 

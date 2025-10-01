@@ -66,7 +66,7 @@ pub use quantization::{
     dequantize_samples, quantize_samples, DequantizationIterator, DequantizeIterator,
     QuantizationIterator, QuantizeIterator,
 };
-pub use wave::{Modulation, QuantizedWaveIterator, Wave, WaveFunc, WaveIterator};
+pub use wave::{Modulation, Wave, WaveFunc, WaveIterator};
 pub use waveform::{Waveform, WaveformIterator, WaveformSource};
 
 // Test README.md
