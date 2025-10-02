@@ -15,9 +15,17 @@ resolver = "2"
 [dependencies]
 libm = "0.2"
 num-traits = { version = "0.2", default-features = false }
+num-complex = { version = "0.4", default-features = false, features = ["libm"] }
+rustfft = { version = "6.4", default-features = false }
 
 [dev-dependencies]
 doc-comment = "0.3"
+hound = "3.5"
+
+[features]
+# Optional diagnostic tests that are expensive and produce verbose output
+# Usage: cargo test --features diagnostics
+diagnostics = []
 
 [profile.release]
 lto = true

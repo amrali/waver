@@ -1,4 +1,5 @@
 name: CI
+permissions: read-all
 
 on:
   workflow_dispatch:
@@ -7,9 +8,9 @@ on:
       - opened
       - synchronize
     paths:
-      - '**.rs'
-      - '**.md'
-      - '.github/workflows/main.yml'
+      - "**.rs"
+      - "**.md"
+      - .github/workflows/main.yml
 
   push:
     branches:
@@ -31,27 +32,19 @@ jobs:
 
     steps:
       - name: Checkout the source code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@v1
         with:
-          profile: minimal
           toolchain: ${{ matrix.rust }}
-          override: true
           components: rustfmt, clippy
 
       - name: Run cargo fmt
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+        run: cargo fmt --all -- --check
 
       - name: Run cargo clippy
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --all --all-features -- -Dwarnings
+        run: cargo clippy --all --all-features -- -Dwarnings
 
   test:
     name: Test
@@ -64,20 +57,15 @@ jobs:
 
     steps:
       - name: Checkout the source code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@v1
         with:
-          profile: minimal
           toolchain: ${{ matrix.rust }}
-          override: true
 
       - name: Run cargo test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all --all-features
+        run: cargo test --all --all-features
 
   coverage:
     name: Coverage
@@ -85,17 +73,13 @@ jobs:
 
     steps:
       - name: Checkout the source code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Install Tarpaulin
-        uses: baptiste0928/cargo-install@v1
+        uses: baptiste0928/cargo-install@v3
         with:
           crate: cargo-tarpaulin
 
@@ -103,6 +87,6 @@ jobs:
         run: cargo tarpaulin --skip-clean --engine llvm --out Html --out lcov
 
       - name: Upload coverage data to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           files: ./lcov.info

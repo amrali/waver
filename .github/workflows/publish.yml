@@ -1,11 +1,12 @@
 name: Publish
+permissions: read-all
 
 on:
   workflow_dispatch:
   push:
     # Pattern matched against refs/tags
     tags:
-      - '*'
+      - "*"
 
 jobs:
   publish:
@@ -13,17 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
-      - name: Install stable Rust toolchain
-        uses: actions-rs/toolchain@v1
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@v1
         with:
-          profile: minimal
           toolchain: stable
-          override: true
+          components: rustfmt, clippy
 
       - name: Publish to crates.io
-        uses: actions-rs/cargo@v1
-        with:
-          command: publish
-          args: --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
