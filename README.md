@@ -1,13 +1,12 @@
 # Waver [![CI](https://github.com/amrali/waver/actions/workflows/main.yml/badge.svg)](https://github.com/amrali/waver/actions/workflows/main.yml) [![codecov](https://codecov.io/gh/amrali/waver/branch/master/graph/badge.svg?token=fN3pEuLaAB)](https://codecov.io/gh/amrali/waver) [![Crates.io](https://img.shields.io/crates/v/waver.svg?logo=rust)](https://crates.io/crates/waver) [![Documentation](https://img.shields.io/badge/docs-current-blue.svg?logo=rust)](https://docs.rs/waver)
 
-Waver is a comprehensive no-std library for waveform generation, signal analysis, and audio synthesis.
-Generate waveforms with dynamic modulation, analyze recorded signals with FFT/STFT, and resynthesize
-audio from frequency analysis.
+Waver is a comprehensive no-std library for signal generation, frequency analysis, and waveform synthesis
+across the entire electromagnetic spectrum—from sub-Hz geological signals to GHz radio frequencies.
 
-A waveform can be a simple sinusoidal wave or a complex waveform of varying
-frequency and amplitude. Waver is useful where there's a need to generate
-a simple sinusoidal sound wave or for constructing a frequency or amplitude
-modulated carrier wave in bare-metal [Arduino] or a [Raspberry Pi].
+Generate precise sinusoidal and complex waveforms with dynamic modulation, perform spectral analysis with
+FFT/STFT, and synthesize signals from recorded data. Whether you're working with audio, RF communications,
+sensor signals, or scientific instrumentation, Waver provides the tools for signal processing in embedded
+and bare-metal environments like [Arduino] and [Raspberry Pi].
 
 ## Installation
 
@@ -46,49 +45,97 @@ fn main() {
 
 ## Features
 
-### Waveform Generation
+### Signal Generation
 
-- **Arbitrary precision**: Generate waveforms using `f32`, `f64`, or other float types
-- **Online generation**: No buffers, infinite iterators
-- **Wave superposition**: Combine multiple waves with weighted amplitudes
+- **Arbitrary precision**: Generate signals using `f32`, `f64`, or other float types for your precision requirements
+- **Streaming generation**: Infinite iterators with no intermediate buffers
+- **Signal superposition**: Combine multiple waveforms with weighted amplitudes
 - **Five wave functions**: Sine, Cosine, Square, Sawtooth, Triangle
+- **Extreme frequency ranges**: From sub-Hz (geological, tidal) to GHz (RF, microwave)
 
 ### Dynamic Modulation
 
-- **LFO (Low-Frequency Oscillator)**: Create tremolo, vibrato, and other modulation effects
-- **Envelope modulation**: Apply custom amplitude and phase envelopes over time
-- **Static values**: Use constant amplitude and phase for simple waveforms
+- **LFO (Low-Frequency Oscillator)**: Implement AM/FM modulation, tremolo, vibrato, and other effects
+- **Envelope modulation**: Apply time-varying amplitude and phase profiles
+- **Static modulation**: Constant-value modulation for simple signals
 
-### Signal Analysis
+### Spectral Analysis
 
-- **FFT**: Perform frequency analysis on recorded signals to extract frequency spectrum
-- **STFT**: Short-Time Fourier Transform for time-varying frequency analysis
-- **Dynamic synthesis**: Resynthesize waveforms from recorded samples by analyzing their harmonic structure
-- **Sub-Hz to GHz**: Support for extreme frequency ranges with appropriate sample rates
+- **FFT**: Fast Fourier Transform for frequency-domain analysis of recorded signals
+- **STFT**: Short-Time Fourier Transform for time-frequency analysis of non-stationary signals
+- **Waveform synthesis**: Reconstruct signals from spectral data with harmonic tracking
+- **Universal frequency support**: Analyze signals from sub-Hz oscillations to GHz electromagnetic waves
 
-### Quantization
+### Quantization & Data Conversion
 
-- **Flexible bit depths**: Convert float samples to any integer type (`i8`, `i16`, `i32`, `u8`, `u16`, etc.)
-- **Iterator-based**: Stream quantization with zero-copy performance
-- **Bidirectional**: Convert between floats and integers seamlessly
+- **Flexible bit depths**: Convert between floating-point and any integer type (`i8`, `i16`, `i32`, `u8`, `u16`, etc.)
+- **Zero-copy streaming**: Iterator-based quantization for memory efficiency
+- **Bidirectional conversion**: Seamless transformation between float and integer representations
 
-### No-std Compatible
+### Embedded & Bare-Metal
 
-- Numerically stable clipping prevention
-- Works on embedded systems, Arduino, Raspberry Pi, and other bare-metal environments
-- Optional `alloc` support for dynamic allocations
+- **no-std compatible**: Works without the standard library
+- **Numerically stable**: Prevents clipping and overflow in signal processing
+- **Embedded-friendly**: Tested on Arduino, Raspberry Pi, and other microcontroller platforms
+- **Optional alloc**: Dynamic allocations only when needed
 
 ## Module Organization
 
-Waver is organized into several public modules for different functionality:
+Waver is organized into specialized modules for different signal processing tasks:
 
-- **`wave`**: Core wave generation with `Wave`, `WaveFunc`, and `Modulation` types
-- **`waveform`**: Complex waveform composition via `Waveform` for generative and recorded signals
-- **`quantization`**: Sample quantization utilities for converting between float and integer representations
-- **`analysis`**: Signal analysis with FFT, STFT, and waveform synthesis capabilities
-- **`error`**: Error types for operation failures
+- **`wave`**: Core signal generation with `Wave`, `WaveFunc`, and `Modulation` types
+- **`waveform`**: Complex signal composition via `Waveform` for both generative and recorded signals
+- **`quantization`**: Precision conversion utilities for floating-point and integer representations
+- **`analysis`**: Spectral analysis with FFT, STFT, and signal reconstruction capabilities
+- **`error`**: Error handling for all operations
+
+## Use Cases
+
+- **Audio Processing**: Sound synthesis, effects, and analysis (20Hz - 20kHz)
+- **RF Communications**: Carrier wave generation and modulation (MHz - GHz)
+- **Sensor Signal Processing**: Low-frequency sensor data analysis (sub-Hz - kHz)
+- **Scientific Instrumentation**: Precision waveform generation for experiments
+- **Embedded Systems**: Real-time signal generation on microcontrollers
+- **Seismology & Geophysics**: Analysis of ultra-low frequency signals
+- **Telecommunications**: Modulated carrier wave synthesis
 
 ## Examples
+
+### Generate a High-Frequency RF Carrier (100 MHz)
+
+```rust
+use waver::{Wave, Waveform};
+
+// Generate 100 MHz carrier wave (common FM radio frequency)
+let rf_carrier = Wave {
+    sample_rate: 1_000_000_000.0,  // 1 GHz sample rate (10x Nyquist)
+    frequency: 100_000_000.0,       // 100 MHz
+    amplitude: 0.8.into(),
+    ..Default::default()
+};
+
+let waveform = Waveform::<f32>::with_wave(1_000_000_000.0, rf_carrier);
+let samples: Vec<f32> = waveform.iter().take(10000).collect();
+```
+
+### Analyze Low-Frequency Sensor Data
+
+```rust
+use waver::{Waveform, analysis};
+
+// Analyze sub-Hz sensor oscillations (e.g., tidal measurements)
+let sensor_data: Vec<f32> = vec![/* your recorded sensor data */];
+let waveform = Waveform::<f32>::from_recorded_samples(10.0, &sensor_data);  // 10 Hz sampling
+
+// Extract dominant frequency components
+let spectrum = analysis::spectrum(&waveform, 1024);
+let (freq, magnitude, phase) = spectrum.data
+    .iter()
+    .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+    .unwrap();
+
+println!("Dominant frequency: {:.4} Hz with magnitude {:.2}", freq, magnitude);
+```
 
 ### Basic Waveform Generation
 
@@ -167,8 +214,19 @@ let (dominant_freq, magnitude, phase) = spectrum.data
     .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
     .unwrap();
 
-// Perform STFT for time-varying analysis
+// Perform STFT for time-varying frequency analysis
 let spectrogram = analysis::time_spectrum(&waveform, 2048, 512).unwrap();
+
+// Examine how frequency content evolves over time
+for (frame_idx, spectrum) in spectrogram.iter().enumerate() {
+    let time = frame_idx as f32 * 512.0 / 44100.0;
+    let (peak_freq, magnitude, _) = spectrum.data
+        .iter()
+        .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+        .unwrap();
+
+    println!("t={:.3}s: peak at {:.1}Hz (mag: {:.2})", time, peak_freq, magnitude);
+}
 
 // Resynthesize a generative waveform from recorded samples
 let synthesized = analysis::synthesize(&waveform, 2048, 512, 10).unwrap();
@@ -195,9 +253,6 @@ let int_samples: Vec<i16> = waveform.iter().take(100).quantize().collect();
 let recovered_floats: Vec<f32> = dequantize_samples(&int_samples);
 ```
 
-
-
-
 ## TODO
 
 - [ ] Implement checks to protect against aliasing (e.g., disallow frequencies above the Nyquist frequency).
@@ -205,7 +260,6 @@ let recovered_floats: Vec<f32> = dequantize_samples(&int_samples);
 - [ ] Replace use of libm crate [when math support moves to libcore].
 - [ ] Add support for more advanced windowing functions for STFT.
 - [ ] Expand inverse FFT capabilities for complete signal reconstruction.
-
 
 ## Contributing
 
