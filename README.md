@@ -1,4 +1,10 @@
+<div align="center">
+  <img src="docs/images/waver_16-9.webp" alt="Waver" width="800"/>
+
 # Waver [![CI](https://github.com/amrali/waver/actions/workflows/main.yml/badge.svg)](https://github.com/amrali/waver/actions/workflows/main.yml) [![codecov](https://codecov.io/gh/amrali/waver/branch/master/graph/badge.svg?token=fN3pEuLaAB)](https://codecov.io/gh/amrali/waver) [![Crates.io](https://img.shields.io/crates/v/waver.svg?logo=rust)](https://crates.io/crates/waver) [![Documentation](https://img.shields.io/badge/docs-current-blue.svg?logo=rust)](https://docs.rs/waver)
+
+**High-precision signal processing for the electromagnetic spectrum**
+</div>
 
 Waver is a comprehensive no-std library for signal generation, frequency analysis, and waveform synthesis
 across the entire electromagnetic spectrum—from sub-Hz geological signals to GHz radio frequencies.
