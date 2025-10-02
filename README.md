@@ -270,11 +270,34 @@ let recovered_floats: Vec<f32> = dequantize_samples(&int_samples);
 
 ## TODO
 
-- [ ] Implement checks to protect against aliasing (e.g., disallow frequencies above the Nyquist frequency).
-- [ ] Use fixed-point arithmetic for platforms that doesn't have an FPU.
-- [ ] Replace use of libm crate [when math support moves to libcore].
-- [ ] Add support for more advanced windowing functions for STFT.
-- [ ] Expand inverse FFT capabilities for complete signal reconstruction.
+### Correctness & Validation
+
+- [ ] Add runtime validation to prevent aliasing (disallow Wave frequencies above Nyquist/2)
+- [ ] Add parameter validation for negative/zero frequencies in Wave construction
+
+### Performance & Portability
+
+- [ ] Implement fixed-point arithmetic for platforms without FPU
+- [ ] Replace use of libm crate [when math support moves to libcore]
+
+### Features & Enhancements
+
+- [ ] Add support for additional windowing functions (Hamming, Blackman, Kaiser) for STFT
+- [ ] Implement streaming/chunked STFT for real-time processing
+- [ ] Add pitch detection/fundamental frequency estimation utilities
+- [ ] Support for custom envelope shapes beyond linear interpolation
+
+### Analysis & Synthesis
+
+- [ ] Add inverse FFT for direct frequency-domain to time-domain conversion
+- [ ] Implement phase vocoder for time-stretching and pitch-shifting
+- [ ] Add filter design utilities (low-pass, high-pass, band-pass)
+
+### Documentation & Examples
+
+- [ ] Add example for RF modulation (AM/FM) at GHz frequencies
+- [ ] Add example for seismic data analysis (sub-Hz)
+- [ ] Document best practices for sample rate selection based on target frequency
 
 ## Contributing
 
