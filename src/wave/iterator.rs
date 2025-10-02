@@ -160,13 +160,12 @@ impl<'a, BitDepth: Float + Copy> Iterator for WaveIterator<'a, BitDepth> {
             return None;
         }
 
-        self.index += 1;
-
         // Check for potential index overflow (very long-running iterators)
         if self.index == usize::MAX {
             return None; // Prevent overflow
         }
 
+        self.index += 1;
         Some(result)
     }
 }
