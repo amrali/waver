@@ -124,12 +124,14 @@ let samples: Vec<f32> = waveform.iter().take(10000).collect();
 use waver::{Waveform, analysis};
 
 // Analyze sub-Hz sensor oscillations (e.g., tidal measurements)
-let sensor_data: Vec<f32> = vec![/* your recorded sensor data */];
+let sensor_data: Vec<f32> = (0..2048)  // Need enough samples for FFT
+    .map(|i| (i as f32 * 0.1).sin())  // Simulate 0.1 Hz oscillation
+    .collect();
 let waveform = Waveform::<f32>::from_recorded_samples(10.0, &sensor_data);  // 10 Hz sampling
 
 // Extract dominant frequency components
 let spectrum = analysis::spectrum(&waveform, 1024);
-let (freq, magnitude, phase) = spectrum.data
+let (freq, magnitude, _phase) = spectrum.data
     .iter()
     .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
     .unwrap();
@@ -202,35 +204,42 @@ let samples: Vec<f32> = waveform.iter().take(44100).collect();
 
 ```rust
 use waver::{Waveform, analysis};
+use std::f32::consts::PI;
 
-// Load or generate recorded samples
-let recorded_samples: Vec<f32> = vec![/* your samples */];
-let waveform = Waveform::<f32>::from_recorded_samples(44100.0, &recorded_samples);
+fn main() {
+    // Generate a test signal with known frequency (440 Hz sine wave)
+    let recorded_samples: Vec<f32> = (0..44100)
+        .map(|i| (2.0 * PI * 440.0 * i as f32 / 44100.0).sin())
+        .collect();
+    let waveform = Waveform::<f32>::from_recorded_samples(44100.0, &recorded_samples);
 
-// Perform FFT analysis
-let spectrum = analysis::spectrum(&waveform, 2048);
-let (dominant_freq, magnitude, phase) = spectrum.data
-    .iter()
-    .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
-    .unwrap();
-
-// Perform STFT for time-varying frequency analysis
-let spectrogram = analysis::time_spectrum(&waveform, 2048, 512).unwrap();
-
-// Examine how frequency content evolves over time
-for (frame_idx, spectrum) in spectrogram.iter().enumerate() {
-    let time = frame_idx as f32 * 512.0 / 44100.0;
-    let (peak_freq, magnitude, _) = spectrum.data
+    // Perform FFT analysis
+    let spectrum = analysis::spectrum(&waveform, 2048);
+    let (dominant_freq, magnitude, _phase) = spectrum.data
         .iter()
         .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
         .unwrap();
 
-    println!("t={:.3}s: peak at {:.1}Hz (mag: {:.2})", time, peak_freq, magnitude);
-}
+    println!("Detected frequency: {:.1} Hz", dominant_freq);
 
-// Resynthesize a generative waveform from recorded samples
-let synthesized = analysis::synthesize(&waveform, 2048, 512, 10).unwrap();
-let new_samples: Vec<f32> = synthesized.iter().take(44100).collect();
+    // Perform STFT for time-varying frequency analysis
+    let spectrogram = analysis::time_spectrum(&waveform, 2048, 512).unwrap();
+
+    // Examine how frequency content evolves over time (first 5 frames)
+    for (frame_idx, spectrum) in spectrogram.iter().take(5).enumerate() {
+        let time = frame_idx as f32 * 512.0 / 44100.0;
+        let (peak_freq, magnitude, _) = spectrum.data
+            .iter()
+            .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+            .unwrap();
+
+        println!("t={:.3}s: peak at {:.1}Hz (mag: {:.2})", time, peak_freq, magnitude);
+    }
+
+    // Resynthesize a generative waveform from recorded samples
+    let synthesized = analysis::synthesize(&waveform, 2048, 512, 10).unwrap();
+    let _new_samples: Vec<f32> = synthesized.iter().take(44100).collect();
+}
 ```
 
 ### Quantization Examples
