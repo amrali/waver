@@ -21,16 +21,23 @@ use alloc::vec::Vec;
 /// A spectral peak with sub-bin frequency accuracy using parabolic interpolation.
 #[derive(Debug, Clone)]
 pub struct SpectralPeak<F> {
+    /// Frequency of the spectral peak in Hertz (Hz), with sub-bin accuracy.
     pub frequency: F,
+    /// Magnitude of the spectral peak (linear scale, e.g., amplitude).
     pub magnitude: F,
+    /// Phase of the spectral peak in radians.
     pub phase: F,
 }
 
 /// Tracks a frequency component across multiple time frames for synthesis.
 #[derive(Debug, Clone)]
 pub struct FrequencyTrack<F> {
+    /// Sequence of optional frame data representing the tracked frequency component in each time frame.
+    /// Each entry is `Some(FrameData)` if the component was detected in that frame, or `None` otherwise.
     frames: Vec<Option<FrameData<F>>>,
+    /// Confidence score for the track, typically in the range [0.0, 1.0], indicating reliability of the frequency track.
     confidence: F,
+    /// The most recently detected frequency value for the track, in Hz or bin units depending on context.
     last_frequency: F,
 }
 
@@ -123,8 +130,34 @@ where
 
 /// Applies parabolic interpolation to estimate peak frequency with sub-bin accuracy.
 ///
+/// # Parameters
+/// - `window`: A slice of three consecutive spectral bins, each represented as a tuple `(frequency, magnitude, phase)`.
+///   - The tuple elements are:
+///     - `frequency`: The center frequency of the bin.
+///     - `magnitude`: The magnitude (amplitude) of the bin.
+///     - `phase`: The phase of the bin.
+/// - `freq_resolution`: The frequency spacing between FFT bins.
+///
+/// # Parabolic Interpolation Formula
 /// Uses a 3-point parabolic fit around the peak to estimate the true frequency
 /// between FFT bins, improving frequency resolution beyond the bin spacing.
+///
+/// The bin offset is computed as:
+/// 
+/// ```text
+///   δ = -b / (2a)
+/// ```
+/// 
+/// where:
+/// - `a = (y_{-1} - 2y_0 + y_{+1}) / 2`
+/// - `b = (y_{+1} - y_{-1}) / 2`
+/// - `y_{-1}`, `y_0`, `y_{+1}` are the magnitudes of the previous, current, and next bins, respectively.
+/// 
+/// The estimated frequency is then:
+/// 
+/// ```text
+///   f_{est} = f_0 + δ * freq_resolution
+/// ```
 fn interpolate_peak_frequency<F>(window: &[(F, F, F)], freq_resolution: F) -> F
 where
     F: num_traits::Float + Copy,
