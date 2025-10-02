@@ -58,8 +58,8 @@ extern crate alloc;
 pub mod analysis;
 pub mod error;
 pub mod quantization;
-mod wave;
-mod waveform;
+pub mod wave;
+pub mod waveform;
 
 pub use self::error::Error;
 pub use quantization::{
